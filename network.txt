@@ -1,0 +1,96 @@
+Parameters:
+  VpcName:
+    Type: String
+    Default: vpc-datalake-poc
+    Description: Name of the VPC
+  VpcCidr:
+    Type: String
+    Default: 10.64.0.0/18
+    Description: CIDR Range for the VPC
+  Subnet1CIDR:
+    Type: String
+    Default: 10.64.0.0/20
+    Description: CIDR Range for Subnet 1
+  Subnet2CIDR:
+    Type: String
+    Default: 10.64.16.0/20
+    Description: CIDR Range for Subnet 2
+  Subnet3CIDR:
+    Type: String
+    Default: 10.64.32.0/20
+    Description: CIDR Range for Subnet 3
+  Subnet4CIDR:
+    Type: String
+    Default: 10.64.48.0/20
+    Description: CIDR Range for Subnet 4
+  Subnet5CIDR:
+    Type: String
+    Default: 10.64.64.0/20
+    Description: CIDR Range for Subnet 5
+  Subnet6CIDR:
+    Type: String
+    Default: 10.64.80.0/20
+    Description: CIDR Range for Subnet 6
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      Tags:
+        - Key: Name
+          Value: !Ref VpcName
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref Subnet1CIDR
+      AvailabilityZone: us-east-1a
+
+  # Define other Subnets similarly for Subnet 2 to Subnet 6
+
+  RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+
+  # Define RouteTable2 and RouteTable3 similarly
+  
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref RouteTable1
+
+  # Define SubnetRouteTableAssociations similarly for other subnets and route tables
+
+  MyNACL:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref MyVPC
+
+  # Associate NACL with subnets using SubnetNetworkAclAssociation
+
+  VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref MyVPC
+      ServiceName: "com.amazonaws.us-east-1.s3"
+
+  MyTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: "Transit Gateway for Data Lake POC"
+      AmazonSideAsn: 64512
+      AutoAcceptSharedAttachments: enable
+
+  MyTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref MyTransitGateway
+      VpcId: !Ref MyVPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        # Add other Subnets as necessary
+
