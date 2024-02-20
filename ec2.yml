@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group allowing specific inbound ports
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8101
+          ToPort: 8106
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  MyS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-s3-bucket
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: "alias/aws/s3"
+              SSEAlgorithm: aws:kms
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-xxxxxxxxxx  # Provide your desired AMI ID
+      InstanceType: t2.micro   # Provide your desired instance type
+      SecurityGroupIds:
+        - Ref: SecurityGroup
