@@ -1,23 +1,31 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Resources:
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group allowing specific inbound ports
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 8101
-          ToPort: 8106
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          CidrIp: 0.0.0.0/0
 
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where the resources will be deployed
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID where the EC2 instance will be deployed
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID for the EC2 instance
+  S3BucketName:
+    Type: String
+    Description: Name for the S3 bucket where logs will be stored
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: ^[a-zA-Z0-9\-]+$
+    ConstraintDescription: Bucket name must be alphanumeric and dashes only
+  AMIId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID for the EC2 instance
+
+Resources:
   MyS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: my-s3-bucket
+      BucketName: !Ref S3BucketName
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -46,18 +54,18 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
-      VpcId: !Ref YourVPC
+      VpcId: !Ref VpcId
       RouteTableIds:
-        - !Ref YourRouteTable
+        - !Ref "YourRouteTable"  # Replace with the appropriate route table ID in your subnet
 
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-xxxxxxxxxx  # Provide your desired AMI ID
-      InstanceType: t2.micro   # Provide your desired instance type
+      ImageId: !Ref AMIId
+      InstanceType: t2.micro   # Update as necessary
       SecurityGroupIds:
-        - Ref: SecurityGroup
-      SubnetId: !Ref YourPrivateSubnet
+        - !Ref SecurityGroupId
+      SubnetId: !Ref SubnetId
 
   LogGroupSubscription:
     Type: AWS::Logs::SubscriptionFilter
