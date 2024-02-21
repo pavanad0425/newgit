@@ -24,6 +24,32 @@ Resources:
               KMSMasterKeyID: "alias/aws/s3"
               SSEAlgorithm: aws:kms
 
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: MyLogGroup
+
+  LogGroupPolicy:
+    Type: AWS::Logs::LogGroupPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: logs:PutLogEvents
+            Resource: !GetAtt LogGroup.Arn
+      PolicyName: MyLogGroupPolicy
+
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref YourVPC
+      RouteTableIds:
+        - !Ref YourRouteTable
+
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -31,3 +57,11 @@ Resources:
       InstanceType: t2.micro   # Provide your desired instance type
       SecurityGroupIds:
         - Ref: SecurityGroup
+      SubnetId: !Ref YourPrivateSubnet
+
+  LogGroupSubscription:
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      LogGroupName: !Ref LogGroup
+      DestinationArn: !Sub "arn:aws:s3:::${MyS3Bucket}/logs/"
+      FilterPattern: ""
