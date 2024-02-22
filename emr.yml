@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template to create an EMR cluster'
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the EMR cluster
+  InstanceType:
+    Type: String
+    Default: m5.xlarge
+    Description: EC2 instance type for the core and task nodes
+  InstanceCount:
+    Type: Number
+    Default: 2
+    Description: Number of EC2 instances in the core node group
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+  LogUri:
+    Type: String
+    Description: URI to specify the location in Amazon S3 where logs are stored
+
+Resources:
+  EMRCluster:
+    Type: 'AWS::EMR::Cluster'
+    Properties:
+      Name: !Ref ClusterName
+      ReleaseLabel: emr-6.5.0  # Change as per your preference
+      Applications:
+        - Name: Hadoop
+        - Name: Hive
+        - Name: Hue
+        - Name: Spark
+      Instances:
+        InstanceGroups:
+          - Name: MasterNodeGroup
+            InstanceRole: MASTER
+            InstanceType: !Ref InstanceType
+            InstanceCount: 1
+          - Name: CoreNodeGroup
+            InstanceRole: CORE
+            InstanceType: !Ref InstanceType
+            InstanceCount: !Ref InstanceCount
+        Ec2KeyName: !Ref KeyName
+        KeepJobFlowAliveWhenNoSteps: true
+        TerminationProtected: false
+      LogUri: !Ref LogUri
+
+Outputs:
+  ClusterId:
+    Description: The ID of the EMR cluster
+    Value: !Ref EMRCluster
