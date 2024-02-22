@@ -63,3 +63,11 @@ Resources:
       LoadBalancerArn: !Ref ALB
       Port: 80
       Protocol: HTTP
+
+Outputs:
+  NLBArn:
+    Description: ARN of the created Network Load Balancer
+    Value: !Ref NLB
+  ALBArn:
+    Description: ARN of the created Application Load Balancer
+    Value: !Ref ALB
