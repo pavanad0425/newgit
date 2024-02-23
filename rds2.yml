@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  DBName:
+    Type: String
+    Default: mydb
+    Description: The name of the database
+  DBUsername:
+    Type: String
+    Default: admin
+    Description: The database admin account username
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: The database admin account password
+  DataSubnet1a:
+    Type: String
+    Description: Subnet ID of DataSubnet1a
+  DataSubnet1b:
+    Type: String
+    Description: Subnet ID of DataSubnet1b
+
+Resources:
+  MyDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora
+      EngineMode: provisioned
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Port: 3306
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "07:00-09:00"
+      ScalingConfiguration:
+        AutoPause: true
+        MinCapacity: 2
+        MaxCapacity: 16
+        SecondsUntilAutoPause: 300
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for Aurora"
+      SubnetIds:
+        - !Ref DataSubnet1a
+        - !Ref DataSubnet1b
