@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create an Amazon MSK cluster within existing VPC and subnets."
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: "Name of the MSK cluster."
+  BrokerInstanceType:
+    Type: String
+    Description: "Instance type for MSK brokers."
+    Default: "kafka.m5.large"
+  NumberOfBrokerNodes:
+    Type: Number
+    Description: "Number of broker nodes in the MSK cluster."
+    Default: 3
+  KafkaVersion:
+    Type: String
+    Description: "Kafka version for the MSK cluster."
+    Default: "2.7.0"
+  ExistingVPC:
+    Type: "AWS::EC2::VPC::Id"
+    Description: "ID of the existing VPC where MSK cluster will be created."
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: "IDs of existing subnets where MSK cluster will be deployed."
+
+Resources:
+  MSKCluster:
+    Type: "AWS::MSK::Cluster"
+    Properties:
+      ClusterName: !Ref ClusterName
+      KafkaVersion: !Ref KafkaVersion
+      NumberOfBrokerNodes: !Ref NumberOfBrokerNodes
+      BrokerNodeGroupInfo:
+        InstanceType: !Ref BrokerInstanceType
+      EncryptionInfo:
+        EncryptionInTransit:
+          InCluster: true
+      EnhancedMonitoring: "DEFAULT"
+      OpenMonitoring:
+        Prometheus:
+          JmxExporter:
+            EnabledInBroker: true
+      Vpc:
+        SecurityGroupId: !Ref SecurityGroup
+        SubnetIds: !Ref SubnetIds
+
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Security group for MSK cluster"
+      VpcId: !Ref ExistingVPC
+
+Outputs:
+  MSKClusterArn:
+    Description: "ARN of the created MSK cluster."
+    Value: !Ref MSKCluster
+  MSKClusterName:
+    Description: "Name of the created MSK cluster."
+    Value: !GetAtt MSKCluster.ClusterName
