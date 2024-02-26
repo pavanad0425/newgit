@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create an EFS and attach it to an existing EC2 instance
+
+Parameters:
+  EC2InstanceId:
+    Type: String
+    Description: ID of the existing EC2 instance to attach the EFS to
+
+Resources:
+  MyEFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value: MyEFS
+
+  MountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFSFileSystem
+      SubnetId: YOUR_SUBNET_ID
+      SecurityGroups: 
+        - YOUR_SECURITY_GROUP_ID
+
+  MountTargetSecondSubnet:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFSFileSystem
+      SubnetId: YOUR_SECOND_SUBNET_ID
+      SecurityGroups: 
+        - YOUR_SECURITY_GROUP_ID
+
+  MountTargetThirdSubnet:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFSFileSystem
+      SubnetId: YOUR_THIRD_SUBNET_ID
+      SecurityGroups: 
+        - YOUR_SECURITY_GROUP_ID
+
+  MyEFSMountPoint:
+    Type: AWS::EC2::Instance::MountPoint
+    Properties:
+      InstanceId: !Ref EC2InstanceId
+      FileSystemId: !Ref MyEFSFileSystem
+      SourceVolume: myefs
+      FileSystemType: efs
+      MountOptions: 
+        - "nfsvers=4.1"
+        - "rsize=1048576"
+        - "wsize=1048576"
+        - "hard"
+        - "timeo=600"
+        - "retrans=2"
+
+Outputs:
+  EFSMountTargetDNS:
+    Value: !GetAtt MountTarget.DnsName
+    Description: DNS name of the EFS Mount Target
