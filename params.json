@@ -1,0 +1,14 @@
+{
+  "Dev": {
+    "Environment": "Development",
+    "Application": "MyAppDev"
+  },
+  "Test": {
+    "Environment": "Testing",
+    "Application": "MyAppTest"
+  },
+  "Prod": {
+    "Environment": "Production",
+    "Application": "MyAppProd"
+  }
+}
