@@ -1,0 +1,58 @@
+Parameters:
+  Environment:
+    Type: String
+    Description: Select the environment for the resources
+    AllowedValues: [Dev, Test, Prod]
+    Default: Dev
+
+Mappings:
+  EnvironmentTags:
+    Dev:
+      NamePrefix: Dev
+    Test:
+      NamePrefix: Test
+    Prod:
+      NamePrefix: Prod
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentTags.${Environment}.NamePrefix}-VPC'
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Environment}'
+          Value: !Select [ Environment, !GetParam tags.json, !Ref Environment ]
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Application}'
+          Value: !Select [ Application, !GetParam tags.json, !Ref Environment ]
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentTags.${Environment}.NamePrefix}-Subnet1'
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Environment}'
+          Value: !Select [ Environment, !GetParam tags.json, !Ref Environment ]
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Application}'
+          Value: !Select [ Application, !GetParam tags.json, !Ref Environment ]
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentTags.${Environment}.NamePrefix}-Subnet2'
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Environment}'
+          Value: !Select [ Environment, !GetParam tags.json, !Ref Environment ]
+        - Key: !Sub '${EnvironmentTags.${Environment}.Tags.Application}'
+          Value: !Select [ Application, !GetParam tags.json, !Ref Environment ]
+
+  # Other resources follow similarly...
