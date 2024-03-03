@@ -1,0 +1,35 @@
+name: Delete Stack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  delete-stack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: List previous CloudFormation stacks
+        id: list-stacks
+        uses: aws-actions/aws-cli@v2
+        with:
+          args: cloudformation list-stacks --stack-status-filter CREATE_COMPLETE --output json
+
+      - name: Extract stack names
+        id: extract-names
+        run: echo "${{ steps.list-stacks.outputs.stdout }}" | jq -r '.StackSummaries[].StackName'
+
+      - name: Select stack to delete
+        id: select-stack
+        run: |
+          echo "Previous stacks:"
+          echo "${{ steps.extract-names.outputs.stdout }}" | tr '\n' '\0' | xargs -0 -n 1 echo "- "
+          echo ""
+          echo "Enter the name of the stack to delete:"
+          read stack_name
+          echo "::set-output name=stack_name::$stack_name"
+
+      - name: Delete selected stack
+        if: steps.select-stack.outputs.stack_name != ''
+        uses: aws-actions/aws-cli@v2
+        with:
+          args: cloudformation delete-stack --stack-name ${{ steps.select-stack.outputs.stack_name }}
