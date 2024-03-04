@@ -1,0 +1,71 @@
+name: Deploy CloudFormation Stack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: your-aws-region  # Replace with your AWS region
+
+      - name: Deploy or delete CloudFormation stack
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "Create" ]; then
+            aws cloudformation deploy --stack-name your-stack-name --template-file path/to/your/template.yaml --parameter-overrides Environment=Dev DeleteStack=No
+          elif [ "${{ github.event.inputs.action }}" == "Delete" ]; then
+            aws cloudformation delete-stack --stack-name your-stack-name
+          fi
+        shell: bash
+
+
+
+
+
+
+
+name: Deploy CloudFormation Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Specify whether to create or delete the stack resources'
+        required: true
+        default: 'Create'
+        options:
+          - 'Create'
+          - 'Delete'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: your-aws-region  # Replace with your AWS region
+
+      - name: Deploy or delete CloudFormation stack
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "Create" ]; then
+            aws cloudformation deploy --stack-name your-stack-name --template-file path/to/your/template.yaml --parameter-overrides Environment=Dev DeleteStack=No
+          elif [ "${{ github.event.inputs.action }}" == "Delete" ]; then
+            aws cloudformation delete-stack --stack-name your-stack-name
+          fi
+        shell: bash
