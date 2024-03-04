@@ -1,0 +1,30 @@
+Parameters:
+  Environment:
+    Type: String
+    Description: Select Environment
+    AllowedValues: [Frontend, Backend, SSS, Datalake, External]
+    Default: Frontend
+
+  VpcCidr:
+    Type: String
+    Default: 10.64.0.0/18
+
+Mappings:
+  EnvironmentTags:
+    Frontend:
+      NamePrefix: 'FE'
+      Tags:
+        - Key: Environment
+          Value: POC
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      Tags:
+        - key: Name
+          Value: 
+            Fn::Sub:
+              - '${NamePrefix}-VPC'
+              - NamePrefix: !FindInMap [EnvironmentTags, !Ref Environment, NamePrefix]
