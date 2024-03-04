@@ -28,3 +28,23 @@ Resources:
             Fn::Sub:
               - '${NamePrefix}-VPC'
               - NamePrefix: !FindInMap [EnvironmentTags, !Ref Environment, NamePrefix]
+
+
+
+
+
+
+
+
+Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub:
+              - '${NamePrefix}-VPC'
+              - NamePrefix: !FindInMap [EnvironmentTags, !Ref Environment, NamePrefix]
+        - Key: !Select
+          - 0
+          - !FindInMap [EnvironmentTags, !Ref Environment, Tags]
+        - Key: !Select
+          - 1
+          - !FindInMap [EnvironmentTags, !Ref Environment, Tags]
