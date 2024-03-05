@@ -10,12 +10,34 @@ Parameters:
     Default: 10.64.0.0/18
 
 Mappings:
-  EnvironmentTags:
+  NamePrefixMappings:
     Frontend:
       NamePrefix: 'FE'
-      Tags:
-        - Key: Environment
-          Value: POC
+    Backend:
+      NamePrefix: 'BE'
+    SSS:
+      NamePrefix: 'SSS'
+    Datalake:
+      NamePrefix: 'DL'
+    External:
+      NamePrefix: 'EXT'
+
+  TagsMappings:
+    Frontend:
+      Environment: 'Frontend'
+      Department: 'IT'
+    Backend:
+      Environment: 'Backend'
+      Department: 'Engineering'
+    SSS:
+      Environment: 'SSS'
+      Department: 'Security'
+    Datalake:
+      Environment: 'Datalake'
+      Department: 'Data'
+    External:
+      Environment: 'External'
+      Department: 'External'
 
 Resources:
   VPC:
@@ -23,28 +45,14 @@ Resources:
     Properties:
       CidrBlock: !Ref VpcCidr
       Tags:
-        - key: Name
+        - Key: "Name"
           Value: 
             Fn::Sub:
-              - '${NamePrefix}-VPC'
-              - NamePrefix: !FindInMap [EnvironmentTags, !Ref Environment, NamePrefix]
-
-
-
-
-
-
-
-
-Tags:
-        - Key: Name
+              -  "${NamePrefix}-VPC"
+              - NamePrefix: !FindInMap [NamePrefixMappings, !Ref Environment, NamePrefix]
+        - Key: "Environment"
           Value: 
-            Fn::Sub:
-              - '${NamePrefix}-VPC'
-              - NamePrefix: !FindInMap [EnvironmentTags, !Ref Environment, NamePrefix]
-        - Key: !Select
-          - 0
-          - !FindInMap [EnvironmentTags, !Ref Environment, Tags]
-        - Key: !Select
-          - 1
-          - !FindInMap [EnvironmentTags, !Ref Environment, Tags]
+            !FindInMap [TagsMappings, !Ref Environment, Environment]
+        - Key: "Department"
+          Value: 
+            !FindInMap [TagsMappings, !Ref Environment, Department]
