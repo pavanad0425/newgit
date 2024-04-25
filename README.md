@@ -1,3 +1,6 @@
+https://github.com/machulav/ec2-github-runner/blob/main/README.md#save-costs
+
+
 Deployment Instructions:
 Access the Pre-Environment:
 
