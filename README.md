@@ -1,42 +1,31 @@
-https://github.com/machulav/ec2-github-runner/blob/main/README.md#save-costs
+To set up a GitHub Runner on AWS ECS (Elastic Container Service), you need to configure IAM roles and policies to allow the runner to interact with AWS services securely. Here's a list of IAM roles and policies you'll need to set up:
 
+1. **ECS Task Execution Role**:
+   - IAM Role: Create an IAM role for ECS task execution.
+   - Policy: Attach the `AmazonECSTaskExecutionRolePolicy` managed policy to this role. This policy grants permissions for ECS to manage tasks on your behalf, including pulling container images from ECR (Elastic Container Registry), creating and updating tasks, and interacting with other AWS services.
 
-Deployment Instructions:
-Access the Pre-Environment:
+2. **IAM Role for GitHub Runner**:
+   - IAM Role: Create a separate IAM role for the GitHub Runner to assume while running tasks in ECS.
+   - Policy: Define a custom IAM policy with permissions required for the GitHub Runner to register itself with GitHub, pull code repositories, and perform other necessary actions.
+     - At minimum, this policy should include permissions for:
+       - Access to the GitHub API for registering runners, fetching repository metadata, and performing other GitHub Actions-related tasks.
+       - Access to any other AWS services your workflows might interact with, such as S3 buckets, DynamoDB tables, etc.
+     - The exact permissions required depend on your specific GitHub workflows and the AWS services they interact with.
+     - Be cautious not to grant excessive permissions beyond what is needed for your workflows.
 
-Log in to the CEFEO pre-environment using the provided URL: https://cefeo-us.pre.aws.us.corp
-Ensure that the website banner is yellow, indicating the pre-environment.
-Workspace Selection:
+3. **Task Role for GitHub Runner**:
+   - IAM Role: Create a task role for the GitHub Runner to assume when running tasks within ECS.
+   - Policy: Attach the custom IAM policy created for the GitHub Runner to this role.
 
-Navigate to the right corner and select the user XID.
-Choose the workspace "CDO" from the options.
-Search and Delete Existing Flows:
+4. **Permissions for Container Registry (Optional)**:
+   - If your GitHub Runner container image is stored in ECR or another container registry, ensure that the ECS task execution role has permission to pull the image from the registry.
+   - Attach the necessary permissions policies to the ECS task execution role to allow pulling images from the container registry.
 
-Search for the flow you intend to deploy. Use the JSON file name without extension for the search.
-Example: If the JSON file name is '[Control Model] [Horizon US] Appian.json', search for "[Control Model] [Horizon US] Appian".
-Once found, take a backup of the existing flow using the 'backup' button beside the flow name.
-Open the flow and navigate to the dependencies section. Remove all dependencies as flows cannot be deleted if dependencies exist.
-Delete the flow by clicking on the 'delete' button beside the flow.
-Switch Workspace:
+5. **Permissions for Logging (Optional)**:
+   - If you plan to use AWS CloudWatch Logs for logging, ensure that the IAM roles have permissions to create log streams and write logs to CloudWatch Logs.
+   - Attach policies such as `AmazonCloudWatchLogsFullAccess` or create custom policies with specific permissions for logging.
 
-Change the workspace from 'CDO' to 'Control Model'.
-Restore Backup and Deploy:
+6. **Network and VPC Permissions**:
+   - Ensure that the IAM roles have appropriate permissions to access networking resources such as VPCs, subnets, security groups, and any other network-related configurations required for ECS task execution.
 
-Click on the 'settings' button at the top right corner.
-From the drop-down menu, select 'Restore backup'.
-Choose the JSON file provided through release notes.
-Click on 'Restore'. Ensure that all checkboxes are selected.
-If there are any conflicts regarding environment variables, select the 'override' radio button and navigate to the 'Environment' tab.
-Provide the environment variable values from the Excel sheet shared through release notes.
-Click on 'Restore'.
-Run Sample Flow:
-
-Search for the newly deployed flow and click on the 'Launch' button beside its name.
-Select the Target Datetime as the previous day and launch the flow.
-Check Flow Status:
-
-To monitor the flow's status, click on 'FlowLogs'.
-Available statuses are QUEUED, RUNNING, COMPLETED, and FAILED.
-Once the flow status is COMPLETED, consider the deployment successful.
-In case of failure, communicate with the respective team members.
-These instructions should guide you through the process of deploying ETL flows from one workspace to another using JSON files in the specified pre-environment.
+By setting up these IAM roles and policies, you ensure that your GitHub Runner on AWS ECS has the necessary permissions to interact securely with GitHub, pull container images, execute tasks, and access other AWS services as needed by your workflows. Be sure to follow the principle of least privilege and regularly review and update permissions to maintain security best practices.
