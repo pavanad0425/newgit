@@ -60,3 +60,105 @@ Before setting up a GitHub runner on an Amazon EKS cluster, ensure you have the 
    - If your workflows involve building Docker images, ensure the GitHub runner has access to the Docker socket (`/var/run/docker.sock`). You can achieve this by mounting the Docker socket as a volume in the runner's pod.
 
 Ensure all these prerequisites are met before proceeding with setting up the GitHub runner on your EKS cluster. This will help streamline the process and avoid any unexpected issues during deployment.
+Certainly! Setting up a GitHub runner on an Amazon EKS cluster involves several steps. Below are detailed instructions:
+
+### Step 1: Prepare IAM Roles
+
+1. **EKS Service Role**: Ensure your EKS cluster has an associated IAM role with permissions to manage resources.
+2. **IAM Role for Runner**: Create an IAM role with permissions to interact with your GitHub repository. Refer to the IAM Role for Runner section in the previous response for a detailed policy.
+
+### Step 2: Generate Registration Token
+
+1. Go to your GitHub repository.
+2. Navigate to `Settings` > `Actions`.
+3. Scroll down to the "Self-hosted runners" section and click on "Add runner".
+4. Follow the prompts to create a new registration token. Keep this token safe.
+
+### Step 3: Create a Kubernetes Secret
+
+1. Store the registration token as a Kubernetes secret:
+   ```bash
+   kubectl create secret generic github-runner-registration-token --from-literal=token=<registration-token> -n <namespace-name>
+   ```
+
+### Step 4: Deploy Runner
+
+1. Use a Kubernetes manifest to deploy the runner. Below is a sample YAML manifest:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-runner
+  namespace: <namespace-name>
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: github-runner
+  template:
+    metadata:
+      labels:
+        app: github-runner
+    spec:
+      containers:
+      - name: github-runner
+        image: 'ghcr.io/github/runner:latest'
+        env:
+        - name: RUNNER_NAME
+          value: "<runner-name>"
+        - name: GITHUB_OWNER
+          value: "<github-owner>"
+        - name: GITHUB_REPOSITORY
+          value: "<github-repository>"
+        - name: RUNNER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-registration-token
+              key: token
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "0.5"
+            memory: "0.5Gi"
+        volumeMounts:
+        - name: docker-sock
+          mountPath: /var/run/docker.sock
+      volumes:
+      - name: docker-sock
+        hostPath:
+          path: /var/run/docker.sock
+```
+
+Replace `<runner-name>`, `<github-owner>`, and `<github-repository>` with your desired values.
+
+### Step 5: Apply the Manifest
+
+1. Apply the YAML manifest to deploy the runner:
+   ```bash
+   kubectl apply -f <path-to-manifest.yaml>
+   ```
+
+### Step 6: Monitor Deployment
+
+1. Check the status of the deployment:
+   ```bash
+   kubectl get pods -n <namespace-name>
+   ```
+
+### Step 7: Configure GitHub Workflow
+
+1. Update your GitHub repository's workflow YAML to use the self-hosted runner. For example:
+   ```yaml
+   jobs:
+     build:
+       runs-on: self-hosted
+   ```
+
+### Step 8: Verify Runner Connection
+
+1. Go to your GitHub repository's Actions tab and verify that the self-hosted runner appears and is idle.
+
+By following these steps, you should have successfully set up a self-hosted GitHub runner on your Amazon EKS cluster. Ensure to monitor the runner's health regularly and update its configuration as needed.
