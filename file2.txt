@@ -1,0 +1,98 @@
+Setting up GitHub self-hosted runners in an AWS ECS (Elastic Container Service) cluster with Fargate involves several steps, including configuring prerequisites, setting up network connectivity, and deploying the runners. Here's a detailed documentation guide to help you through the process:
+
+### Prerequisites:
+
+1. **GitHub Repository:** Ensure you have access to the GitHub repository for which you want to set up the self-hosted runners.
+
+2. **AWS Account:** You need an AWS account with permissions to create and manage resources like ECS clusters, Fargate tasks, IAM roles, and networking components.
+
+3. **Docker Image:** Prepare a Docker image containing the GitHub runner software and any additional dependencies required.
+
+4. **GitHub Personal Access Token:** Generate a GitHub personal access token with appropriate permissions to register runners. Store this securely as it will be used during the runner setup.
+
+### Network Connectivity:
+
+1. **VPC Configuration:** If you haven't already, set up a Virtual Private Cloud (VPC) in AWS.
+
+2. **Subnets:** Create subnets within your VPC. You will need both public and private subnets. The ECS tasks will run in the private subnet, while load balancers and other public-facing components will reside in the public subnet.
+
+3. **Security Groups:** Configure security groups to control inbound and outbound traffic to your ECS tasks. Ensure that your GitHub runners can communicate with GitHub's servers and any other necessary services.
+
+4. **Internet Gateway/NAT Gateway:** If your ECS tasks need internet access (for pulling Docker images, for example), set up an Internet Gateway or a NAT Gateway in your public subnet.
+
+### Setting Up GitHub Runners in AWS ECS with Fargate:
+
+1. **Create ECS Cluster:**
+   - Log in to the AWS Management Console and navigate to the ECS service.
+   - Create a new ECS cluster or use an existing one.
+   - Ensure the cluster has sufficient resources to run your GitHub runners.
+
+2. **Task Definition:**
+   - Create an ECS task definition specifying the Docker image for your GitHub runner and any required configurations.
+   - Configure environment variables for the runner, including the GitHub personal access token and the repository URL.
+
+3. **Service Configuration:**
+   - Create a new ECS service using the task definition created in the previous step.
+   - Configure the service to use Fargate launch type and specify the desired number of tasks.
+
+4. **IAM Role:**
+   - Create an IAM role that allows ECS tasks to interact with other AWS services like CloudWatch Logs.
+   - Attach the necessary policies to this role.
+
+5. **Register Runners:**
+   - Once the ECS service is running, the Fargate tasks will automatically start.
+   - These tasks will register themselves as GitHub runners using the provided access token and repository URL.
+
+6. **Testing:**
+   - Verify that the runners appear in your GitHub repository's settings under "Actions" > "Runners."
+   - Trigger a workflow to ensure that the self-hosted runner executes the jobs correctly.
+
+### Monitoring and Maintenance:
+
+1. **CloudWatch Logs:** Monitor ECS task logs using CloudWatch Logs to troubleshoot any issues.
+
+2. **Auto Scaling:** Consider implementing auto-scaling policies for your ECS service to automatically adjust the number of tasks based on demand.
+
+3. **Regular Updates:** Keep your Docker image and ECS task definitions up to date with the latest GitHub runner releases and any changes in your repository's workflows.
+
+4. **Security Updates:** Regularly review and update IAM policies and security group rules to ensure the security of your ECS cluster and GitHub runners.
+
+By following these steps, you can successfully set up GitHub self-hosted runners in an AWS ECS cluster with Fargate, enabling your workflows to execute within your AWS environment.
+
+
+Setting up GitHub self-hosted runners in an AWS ECS cluster with Fargate requires several IAM (Identity and Access Management) roles with specific permissions to interact with various AWS services and resources. Here's a detailed list of the IAM roles required for this task:
+
+1. **ECS Task Execution Role:**
+   - This role is used by ECS to run tasks on your behalf and requires the following permissions:
+     - `ecs:RunTask`: Allows ECS to run tasks.
+     - `ecs:StopTask`: Allows ECS to stop tasks.
+     - `ecs:DescribeTasks`: Allows ECS to describe tasks.
+
+2. **ECR (Elastic Container Registry) Access Role (if using a private Docker image repository):**
+   - If your Docker image is stored in a private ECR repository, you need an IAM role with permissions to pull images from ECR. This role requires permissions like:
+     - `ecr:GetAuthorizationToken`: Allows retrieving authorization tokens for accessing Docker repositories.
+     - `ecr:BatchCheckLayerAvailability`: Allows checking the availability of image layers.
+     - `ecr:GetDownloadUrlForLayer`: Allows retrieving the download URL for a layer.
+     - `ecr:BatchGetImage`: Allows retrieving Docker images.
+
+3. **CloudWatch Logs Role:**
+   - This role is required to enable ECS tasks to send logs to CloudWatch Logs. Permissions include:
+     - `logs:CreateLogStream`: Allows creating log streams.
+     - `logs:PutLogEvents`: Allows putting log events into a log stream.
+
+4. **GitHub Runner Registration Role:**
+   - This role is used by the GitHub runners to register themselves with your GitHub repository. It requires permissions to interact with the GitHub API, including:
+     - `repo:SelfRepo`: Allows reading and writing to the repository.
+     - `admin:org`: Allows reading and writing to organization settings.
+     - `admin:public_key`: Allows reading and writing public keys.
+     - `admin:repo_hook`: Allows reading and writing repository hooks.
+     - `admin:org_hook`: Allows reading and writing organization hooks.
+     - `admin:gpg_key`: Allows reading and writing GPG keys.
+
+5. **(Optional) Amazon S3 Access Role (if your workflow interacts with S3):**
+   - If your workflow needs to interact with Amazon S3, you'll need an IAM role with appropriate permissions. This role may include permissions such as:
+     - `s3:GetObject`: Allows reading objects from S3 buckets.
+     - `s3:PutObject`: Allows writing objects to S3 buckets.
+     - `s3:ListBucket`: Allows listing objects within S3 buckets.
+
+Ensure that these IAM roles are properly configured with the necessary permissions and attached to your ECS tasks and services according to your deployment requirements. Also, follow the principle of least privilege, granting only the permissions required for each role to minimize potential security risks.
