@@ -1,31 +1,45 @@
-To set up a GitHub Runner on AWS ECS (Elastic Container Service), you need to configure IAM roles and policies to allow the runner to interact with AWS services securely. Here's a list of IAM roles and policies you'll need to set up:
+If you want to restrict your EC2 instance from connecting directly to the internet but still enable it to communicate with GitHub's services securely, you can set up a network architecture that routes traffic through a private subnet and optionally uses a proxy or a transit gateway for outbound connectivity. Here's how you can achieve this:
 
-1. **ECS Task Execution Role**:
-   - IAM Role: Create an IAM role for ECS task execution.
-   - Policy: Attach the `AmazonECSTaskExecutionRolePolicy` managed policy to this role. This policy grants permissions for ECS to manage tasks on your behalf, including pulling container images from ECR (Elastic Container Registry), creating and updating tasks, and interacting with other AWS services.
+### Network Architecture:
 
-2. **IAM Role for GitHub Runner**:
-   - IAM Role: Create a separate IAM role for the GitHub Runner to assume while running tasks in ECS.
-   - Policy: Define a custom IAM policy with permissions required for the GitHub Runner to register itself with GitHub, pull code repositories, and perform other necessary actions.
-     - At minimum, this policy should include permissions for:
-       - Access to the GitHub API for registering runners, fetching repository metadata, and performing other GitHub Actions-related tasks.
-       - Access to any other AWS services your workflows might interact with, such as S3 buckets, DynamoDB tables, etc.
-     - The exact permissions required depend on your specific GitHub workflows and the AWS services they interact with.
-     - Be cautious not to grant excessive permissions beyond what is needed for your workflows.
+1. **Private Subnet**:
+   - Deploy your EC2 instance in a private subnet within your VPC.
+   - Ensure that the private subnet does not have a route to the internet gateway.
 
-3. **Task Role for GitHub Runner**:
-   - IAM Role: Create a task role for the GitHub Runner to assume when running tasks within ECS.
-   - Policy: Attach the custom IAM policy created for the GitHub Runner to this role.
+2. **NAT Gateway or NAT Instance (Optional)**:
+   - If your EC2 instance needs outbound internet access for communicating with GitHub's services, you can deploy a NAT Gateway or NAT Instance in a public subnet.
+   - Configure the private subnet's route table to route all internet-bound traffic through the NAT Gateway or NAT Instance.
+   - Ensure that the security groups associated with the NAT Gateway or NAT Instance allow outbound traffic to GitHub's services (e.g., api.github.com over HTTPS).
 
-4. **Permissions for Container Registry (Optional)**:
-   - If your GitHub Runner container image is stored in ECR or another container registry, ensure that the ECS task execution role has permission to pull the image from the registry.
-   - Attach the necessary permissions policies to the ECS task execution role to allow pulling images from the container registry.
+3. **Proxy Server (Optional)**:
+   - Deploy a proxy server within your network infrastructure or in a separate subnet.
+   - Configure the EC2 instance to route outbound traffic through the proxy server.
+   - Ensure that the proxy server allows outbound traffic to GitHub's services and is properly configured to handle HTTPS traffic.
 
-5. **Permissions for Logging (Optional)**:
-   - If you plan to use AWS CloudWatch Logs for logging, ensure that the IAM roles have permissions to create log streams and write logs to CloudWatch Logs.
-   - Attach policies such as `AmazonCloudWatchLogsFullAccess` or create custom policies with specific permissions for logging.
+4. **Transit Gateway (Optional)**:
+   - If you have multiple VPCs or on-premises networks that need access to GitHub's services, consider using AWS Transit Gateway.
+   - Deploy the EC2 instance and GitHub's services (if applicable) in separate VPCs.
+   - Attach both VPCs to the Transit Gateway.
+   - Configure route propagation and route tables to allow traffic between the VPCs through the Transit Gateway.
+   - Ensure that the Transit Gateway allows outbound traffic to GitHub's services.
 
-6. **Network and VPC Permissions**:
-   - Ensure that the IAM roles have appropriate permissions to access networking resources such as VPCs, subnets, security groups, and any other network-related configurations required for ECS task execution.
+### Security Considerations:
 
-By setting up these IAM roles and policies, you ensure that your GitHub Runner on AWS ECS has the necessary permissions to interact securely with GitHub, pull container images, execute tasks, and access other AWS services as needed by your workflows. Be sure to follow the principle of least privilege and regularly review and update permissions to maintain security best practices.
+1. **Security Groups**:
+   - Configure security groups for the EC2 instance to control inbound and outbound traffic.
+   - Allow inbound SSH (if needed) and outbound traffic to the proxy server or NAT Gateway/NAT Instance.
+   - Restrict outbound traffic to only necessary destinations, such as GitHub's services.
+
+2. **IAM Policies**:
+   - Ensure that the IAM role associated with the EC2 instance has the necessary permissions to communicate with GitHub's services and other AWS resources.
+
+### GitHub Runner Configuration:
+
+1. **Proxy Configuration**:
+   - If using a proxy server, configure the EC2 instance to use the proxy for outbound traffic.
+   - Set environment variables or update system-wide proxy settings as needed.
+
+2. **Outbound Connectivity**:
+   - Test the connectivity from the EC2 instance to GitHub's services to ensure that it can register as a self-hosted runner and communicate with GitHub repositories.
+
+By implementing these network architecture and security measures, you can ensure that your EC2 instance can communicate securely with GitHub's services without direct internet access, providing an additional layer of isolation and security for your environment.
