@@ -1,1 +1,29 @@
-new feature file
+1. EKS Service Role:
+This IAM role is associated with your Amazon EKS cluster and should have the following permissions:
+
+AmazonEKSClusterPolicy: Allows Amazon EKS to manage Kubernetes clusters on your behalf.
+AmazonEKSServicePolicy: Grants necessary permissions for the Amazon EKS service to interact with other AWS services.
+2. IAM Role for Runner:
+This IAM role is used by the self-hosted GitHub runner to interact with your GitHub repository and perform necessary actions. The permissions required depend on the actions your workflows perform but generally include:
+
+repo: Grants read/write access to the repository, including cloning, pulling, and pushing changes.
+actions: Provides access to GitHub Actions, allowing the runner to execute workflows and access job logs.
+packages: Required if your workflows publish packages or Docker images to GitHub Packages.
+admin:org: Grants access to organization-level actions, such as managing webhooks.
+admin:repo_hook: Allows the runner to manage repository hooks, which are necessary for triggering workflows.
+
+NETWORKING
+
+Control Plane Connectivity:
+Private Subnet: The control plane resides within a private subnet, which means it's not directly accessible from the internet. This enhances security by preventing direct access to the Kubernetes API server from external sources.
+NAT Gateway or NAT Instance: To allow the control plane to communicate with AWS services such as EC2 instances, ECR, and S3, you'll typically use a Network Address Translation (NAT) gateway or NAT instance in a public subnet. The private subnet with the EKS control plane will route traffic through the NAT gateway/instance to reach the internet.
+Route Tables: The private subnet's route table should be configured to route internet-bound traffic (0.0.0.0/0) to the NAT gateway/instance.
+Worker Nodes Connectivity:
+Worker Node Subnets: Your worker nodes can reside in private subnets, public subnets, or a combination of both. If they're in private subnets, they won't have direct internet connectivity.
+Internet Access for Worker Nodes: To allow worker nodes to access internet resources (e.g., pulling Docker images, downloading dependencies), you can use one of the following methods:
+NAT Gateway in Public Subnet: Similar to the control plane setup, you can use a NAT gateway in a public subnet to provide internet access to worker nodes in private subnets.
+NAT Gateway in Worker Node Subnets: Alternatively, you can deploy NAT gateways directly in the worker node subnets.
+Routing: Worker nodes in private subnets must have routes configured to send internet-bound traffic to the NAT gateway.
+Cluster Communication:
+Internal Communication: Communication between the control plane and worker nodes, as well as between worker nodes themselves, occurs internally within the VPC. This traffic doesn't traverse the internet.
+Security Groups and Network ACLs: Use security groups and network ACLs to control traffic between different components of the EKS cluster. Ensure that necessary ports are open for communication, such as those required by Kubernetes components (e.g., API server, etcd) and application workloads.
