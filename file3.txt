@@ -27,3 +27,36 @@ Routing: Worker nodes in private subnets must have routes configured to send int
 Cluster Communication:
 Internal Communication: Communication between the control plane and worker nodes, as well as between worker nodes themselves, occurs internally within the VPC. This traffic doesn't traverse the internet.
 Security Groups and Network ACLs: Use security groups and network ACLs to control traffic between different components of the EKS cluster. Ensure that necessary ports are open for communication, such as those required by Kubernetes components (e.g., API server, etcd) and application workloads.
+STEPS
+Before setting up a GitHub runner on an Amazon EKS cluster, ensure you have the following prerequisites in place:
+
+### 1. Amazon EKS Cluster:
+   - An existing Amazon EKS cluster set up in your AWS account.
+   - The cluster should be accessible from the machine where you'll be running `kubectl` commands.
+
+### 2. Kubernetes Tools:
+   - `kubectl` installed on your local machine to interact with your EKS cluster.
+   - Ensure you have the necessary permissions to access the cluster.
+
+### 3. GitHub Repository:
+   - A GitHub repository where you'll configure your workflows to use the self-hosted runner.
+   - You should have administrative access to this repository to manage runners.
+
+### 4. IAM Roles:
+   - **EKS Service Role**: An IAM role associated with your EKS cluster with sufficient permissions. This role should include permissions to create and manage resources like EC2 instances, IAM roles, and other AWS resources.
+   - **IAM Role for Runner**: Create an IAM role for the runner with permissions to interact with your GitHub repository. Refer to the IAM Role for Runner section in the previous response for detailed permissions.
+
+### 5. Network Configuration:
+   - Ensure your EKS cluster is set up in a VPC with proper network configurations.
+   - If the cluster is in a private subnet, ensure there's connectivity to the internet for necessary operations like pulling Docker images and accessing GitHub.
+
+### 6. GitHub Personal Access Token:
+   - Generate a personal access token from your GitHub account with sufficient permissions to register the self-hosted runner. The token should have the `repo` scope.
+
+### 7. Kubernetes Namespace:
+   - Decide on a Kubernetes namespace where you'll deploy the GitHub runner. You can use an existing namespace or create a new one.
+
+### 8. Docker Socket Access (Optional):
+   - If your workflows involve building Docker images, ensure the GitHub runner has access to the Docker socket (`/var/run/docker.sock`). You can achieve this by mounting the Docker socket as a volume in the runner's pod.
+
+Ensure all these prerequisites are met before proceeding with setting up the GitHub runner on your EKS cluster. This will help streamline the process and avoid any unexpected issues during deployment.
