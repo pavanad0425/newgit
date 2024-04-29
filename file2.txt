@@ -60,39 +60,61 @@ Setting up GitHub self-hosted runners in an AWS ECS (Elastic Container Service) 
 By following these steps, you can successfully set up GitHub self-hosted runners in an AWS ECS cluster with Fargate, enabling your workflows to execute within your AWS environment.
 
 
-Setting up GitHub self-hosted runners in an AWS ECS cluster with Fargate requires several IAM (Identity and Access Management) roles with specific permissions to interact with various AWS services and resources. Here's a detailed list of the IAM roles required for this task:
+Setting up a self-hosted GitHub runner on an AWS ECS cluster in a private subnet requires several steps, including setting up the necessary IAM roles, creating a VPC with private subnets, configuring security groups, and launching the ECS cluster with the runner task definition. Here's a detailed guide:
 
-1. **ECS Task Execution Role:**
-   - This role is used by ECS to run tasks on your behalf and requires the following permissions:
-     - `ecs:RunTask`: Allows ECS to run tasks.
-     - `ecs:StopTask`: Allows ECS to stop tasks.
-     - `ecs:DescribeTasks`: Allows ECS to describe tasks.
+### Prerequisites:
 
-2. **ECR (Elastic Container Registry) Access Role (if using a private Docker image repository):**
-   - If your Docker image is stored in a private ECR repository, you need an IAM role with permissions to pull images from ECR. This role requires permissions like:
-     - `ecr:GetAuthorizationToken`: Allows retrieving authorization tokens for accessing Docker repositories.
-     - `ecr:BatchCheckLayerAvailability`: Allows checking the availability of image layers.
-     - `ecr:GetDownloadUrlForLayer`: Allows retrieving the download URL for a layer.
-     - `ecr:BatchGetImage`: Allows retrieving Docker images.
+1. **AWS Account**: You need an AWS account with the necessary permissions to create resources like VPCs, ECS clusters, IAM roles, etc.
+  
+2. **GitHub Repository**: You should have a GitHub repository where you want to use the self-hosted runner.
 
-3. **CloudWatch Logs Role:**
-   - This role is required to enable ECS tasks to send logs to CloudWatch Logs. Permissions include:
-     - `logs:CreateLogStream`: Allows creating log streams.
-     - `logs:PutLogEvents`: Allows putting log events into a log stream.
+### Steps:
 
-4. **GitHub Runner Registration Role:**
-   - This role is used by the GitHub runners to register themselves with your GitHub repository. It requires permissions to interact with the GitHub API, including:
-     - `repo:SelfRepo`: Allows reading and writing to the repository.
-     - `admin:org`: Allows reading and writing to organization settings.
-     - `admin:public_key`: Allows reading and writing public keys.
-     - `admin:repo_hook`: Allows reading and writing repository hooks.
-     - `admin:org_hook`: Allows reading and writing organization hooks.
-     - `admin:gpg_key`: Allows reading and writing GPG keys.
+#### 1. Set up a Virtual Private Cloud (VPC):
 
-5. **(Optional) Amazon S3 Access Role (if your workflow interacts with S3):**
-   - If your workflow needs to interact with Amazon S3, you'll need an IAM role with appropriate permissions. This role may include permissions such as:
-     - `s3:GetObject`: Allows reading objects from S3 buckets.
-     - `s3:PutObject`: Allows writing objects to S3 buckets.
-     - `s3:ListBucket`: Allows listing objects within S3 buckets.
+- Go to the AWS Management Console and navigate to the VPC dashboard.
+- Create a new VPC with private subnets. Ensure that the private subnets do not have direct internet access. You can achieve this by not associating them with a route table that has an internet gateway.
+- Configure the VPC with the appropriate CIDR block and subnet sizes according to your requirements.
 
-Ensure that these IAM roles are properly configured with the necessary permissions and attached to your ECS tasks and services according to your deployment requirements. Also, follow the principle of least privilege, granting only the permissions required for each role to minimize potential security risks.
+#### 2. Create IAM Roles:
+
+- Create an IAM role for ECS tasks with permissions to access resources needed by your application (e.g., accessing the GitHub repository).
+- Attach the necessary policies to the role. For GitHub Actions, you'll need permissions to pull code from your repository and execute actions defined in workflows.
+
+#### 3. Set up Security Groups:
+
+- Create security groups for your ECS tasks and ensure that they allow inbound and outbound traffic as per your application's requirements. For example, you may need to allow outbound HTTPS traffic to communicate with GitHub.
+- Ensure that inbound traffic is restricted only to the necessary ports and sources.
+
+#### 4. Launch an ECS Cluster:
+
+- Go to the ECS dashboard in the AWS Management Console.
+- Create a new ECS cluster within your VPC and private subnets.
+- Configure the cluster with the appropriate instance type, ECS-optimized AMI, and desired capacity.
+
+#### 5. Define a Task Definition for the GitHub Runner:
+
+- Create a task definition that defines the container(s) for your GitHub runner. Specify the Docker image to use for the runner.
+- Configure the task definition with the necessary environment variables, such as the GitHub repository URL and access token.
+- Ensure that the task definition uses the IAM role you created earlier.
+
+#### 6. Launch the GitHub Runner Task:
+
+- Create a new ECS service using the task definition you defined.
+- Configure the service to run the desired number of tasks and to use the private subnets and security groups you created.
+- Start the service, and ECS will launch the GitHub runner tasks in your private subnet.
+
+#### 7. Configure GitHub Repository:
+
+- In your GitHub repository settings, navigate to "Settings" > "Actions" > "Add a runner".
+- Follow the instructions to download and configure the GitHub runner on your ECS instances.
+- Use the registration token provided by GitHub during the runner setup process.
+
+### Network Connectivity:
+
+- The ECS instances in your private subnet should have outbound internet access to communicate with GitHub over HTTPS.
+- Ensure that the security groups associated with your ECS instances allow outbound traffic on port 443 (HTTPS) to GitHub's IP ranges.
+- If your VPC has a NAT gateway or NAT instance for outbound internet access, make sure the private subnets are routed to it.
+- GitHub runner communicates with GitHub servers over HTTPS. So, ensure that HTTPS traffic is allowed in the outbound rules of your security groups.
+
+By following these steps, you should be able to set up a self-hosted GitHub runner on an AWS ECS cluster in a private subnet with the necessary network connectivity.
