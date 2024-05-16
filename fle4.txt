@@ -55,3 +55,15 @@ RUN curl -s https://s3.amazonaws.com/download.draios.com/stable/install-sysdig |
 # Run the Sysdig agent
 CMD ["sysdig-agent"]
 
+
+
+
+
+
+docker run -itd --name sysdig-agent --privileged --net host --pid host \
+  -e ACCESS_KEY=YOUR_ACCESS_KEY \
+  -v /var/run/docker.sock:/host/var/run/docker.sock \
+  -v /dev:/host/dev -v /proc:/host/proc:ro \
+  -v /boot:/host/boot:ro -v /lib/modules:/host/lib/modules:ro \
+  -v /usr:/host/usr:ro sysdig/agent
+
