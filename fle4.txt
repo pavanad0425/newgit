@@ -36,3 +36,22 @@ Ah, got it! Sysdig is a powerful system monitoring and troubleshooting tool. Her
     This command should output the installed version of Sysdig, indicating that it's installed properly.
 
 That's it! Sysdig should now be installed on your Red Hat UBI 8 system. You can start using it to monitor and troubleshoot your system as needed.
+
+
+
+
+
+
+
+# Use Red Hat Universal Base Image (UBI) 8 as the base image
+FROM registry.access.redhat.com/ubi8/ubi:latest
+
+# Install required dependencies
+RUN yum install -y curl
+
+# Download and install the Sysdig agent
+RUN curl -s https://s3.amazonaws.com/download.draios.com/stable/install-sysdig | bash
+
+# Run the Sysdig agent
+CMD ["sysdig-agent"]
+
