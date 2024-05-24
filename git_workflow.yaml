@@ -48,3 +48,77 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+
+      name: Backup Repositories
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout this repository
+      - name: Checkout this repository
+        uses: actions/checkout@v2
+
+      # Step 2: Install necessary dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip jq
+
+      # Step 3: Configure AWS CLI
+      - name: Configure AWS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set region us-east-1
+
+      # Step 4: Verify the CSV file exists
+      - name: Verify CSV file exists
+        run: |
+          if [ ! -f .github/workflows/repositories.csv ]; then
+            echo "Error: .github/workflows/repositories.csv not found!"
+            exit 1
+          else
+            echo "CSV file found."
+          fi
+
+      # Step 5: Read CSV and Process Repositories
+      - name: Read CSV and Process Repositories
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          while IFS=, read -r repo branch
+          do
+            # Extract repo name
+            repo_name=$(basename $repo .git)
+            
+            # Set up the authenticated URL
+            authenticated_repo_url=$(echo $repo | sed "s|https://|https://$GH_PAT:x-oauth-basic@|")
+            
+            # Clone the repository and checkout the specified branch
+            git clone --branch $branch $authenticated_repo_url $repo_name
+
+            # Zip the repository contents
+            zip -r ${repo_name}.zip $repo_name
+
+            # Upload to S3
+            aws s3 cp ${repo_name}.zip s3://your-s3-bucket/${repo_name}.zip
+
+            # Clean up
+            rm -rf $repo_name
+            rm ${repo_name}.zip
+          done < .github/workflows/repositories.csv
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
