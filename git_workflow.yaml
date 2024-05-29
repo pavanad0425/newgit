@@ -122,3 +122,15 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+
+
+
+
+- name: Verify CSV file exists
+        run: |
+          if [ ! -f .github/workflows/repositories.csv ]; then
+            echo "Error: .github/workflows/repositories.csv not found!"
+            exit 1
+          else
+            echo "CSV file found."
+          fi
