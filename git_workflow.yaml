@@ -168,61 +168,49 @@ jobs:
           aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
           aws configure set region us-east-1
 
-      # Step 4: Verify the CSV file exists
-      - name: Verify CSV file exists
-        run: |
-          if [ ! -f .github/workflows/repositories.csv ]; then
-            echo "Error: .github/workflows/repositories.csv not found!"
-            exit 1
-          else
-            echo "CSV file found."
-          fi
-
-      # Step 5: Read CSV and Process Repositories
-      - name: Read CSV and Process Repositories
+      # Step 4: Extract repository name from zip file name and process it
+      - name: Process Repository
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          while IFS=, read -r repo branch
-          do
-            # Use 'main' as the default branch if branch is empty
-            branch=${branch:-main}
-            
-            # Extract repo name
-            repo_name=$(basename $repo .git)
-            
-            # Set up the authenticated URL
-            authenticated_repo_url=$(echo $repo | sed "s|https://|https://$GH_PAT:x-oauth-basic@|")
-            
-            # Clone the repository and checkout the specified branch
-            git clone --branch $branch $authenticated_repo_url $repo_name
-
-            # Download the processed zip file from S3
-            processed_zip_file="${repo_name}-${branch}-processed.zip"
-            aws s3 cp s3://your-s3-bucket/$processed_zip_file $processed_zip_file
-
-            # Unzip the processed file
-            unzip -o $processed_zip_file -d $repo_name
-
-            # Create a new branch for the processed data
-            cd $repo_name
-            new_branch="processed-branch-${branch}"
-            git checkout -b $new_branch
-
-            # Add the unzipped files
-            git add .
-            
-            # Commit the changes
-            git commit -m "Add processed data from $processed_zip_file"
-
-            # Push the new branch to the remote repository
-            git push $authenticated_repo_url $new_branch
-            
-            # Clean up
-            cd ..
-            rm -rf $repo_name
-            rm $processed_zip_file
-          done < .github/workflows/repositories.csv
+          zipfile=${{ github.event.inputs.zipfile }}
+          
+          # Extract repo name from the zip file name
+          repo_name=$(basename "$zipfile" .zip)
+          
+          # Set up the repository URL
+          repo="https://github.com/your-organization/$repo_name.git"
+          authenticated_repo_url=$(echo $repo | sed "s|https://|https://$GH_PAT:x-oauth-basic@|")
+          
+          # Clone the repository and checkout the main branch
+          git clone --branch main $authenticated_repo_url $repo_name
+          
+          # Download the processed zip file from S3
+          aws s3 cp s3://your-s3-bucket/$zipfile $zipfile
+          
+          # Unzip the processed file into the repository directory
+          unzip -o $zipfile -d $repo_name
+          
+          # Create a new branch for the processed data
+          cd $repo_name
+          new_branch="processed-branch"
+          git checkout -b $new_branch
+          
+          # Add the unzipped files
+          git add .
+          
+          # Commit the changes
+          git commit -m "Add processed data from $zipfile"
+          
+          # Push the new branch to the remote repository
+          git push $authenticated_repo_url $new_branch
+          
+          # Clean up
+          cd ..
+          rm -rf $repo_name
+          rm $zipfile
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            
+            
