@@ -193,6 +193,8 @@ jobs:
           
           # Create a new branch for the processed data
           cd $repo_name
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           new_branch="processed-branch"
           git checkout -b $new_branch
           
