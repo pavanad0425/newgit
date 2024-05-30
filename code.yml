@@ -1,117 +1,66 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Simple ECS Cluster with NLB, ALB, and Backend Database (Private Subnets)
+name: Restore Repository from S3 Backup to Another Repository
 
-Parameters:
-  VpcCIDR:
-    Type: String
-    Default: "10.0.0.0/16"
-    Description: CIDR block for the VPC
-  BackendSubnetCIDR:
-    Type: String
-    Default: "10.0.1.0/24"
-    Description: CIDR block for the backend subnet
-  ApplicationSubnetCIDR:
-    Type: String
-    Default: "10.0.2.0/24"
-    Description: CIDR block for the application subnet
-  DataSubnetCIDR:
-    Type: String
-    Default: "10.0.3.0/24"
-    Description: CIDR block for the data subnet
-  DBUsername:
-    Type: String
-    Default: "admin"
-    Description: Username for the database
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: Password for the database
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: 'S3 bucket name'
+        required: true
+      repo_name:
+        description: 'Repository name for backup file'
+        required: true
+      branch_name:
+        description: 'New branch name for the backup'
+        required: true
+      target_owner:
+        description: 'Target repository owner'
+        required: true
+      target_repo:
+        description: 'Target repository name'
+        required: true
 
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCIDR
+jobs:
+  restore:
+    runs-on: ubuntu-latest
 
-  BackendSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Ref BackendSubnetCIDR
-      AvailabilityZone: !Select [0, !GetAZs ""]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-  ApplicationSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Ref ApplicationSubnetCIDR
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Change to your AWS region
 
-  DataSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Ref DataSubnetCIDR
-      AvailabilityZone: !Select [2, !GetAZs ""]
+      - name: Download backup from S3
+        run: |
+          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
 
-  NLB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internal
-      Subnets: 
-        - !Ref BackendSubnet
-      Type: network
+      - name: Unzip backup
+        run: unzip -o backup.zip
 
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internal
-      Subnets:
-        - !Ref BackendSubnet
-      Type: application
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
 
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: db.t2.micro
-      Engine: mysql
-      EngineVersion: "5.7"
-      DBName: ContactsDB
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: 10
-      StorageType: gp2
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      VPCSecurityGroups:
-        - !GetAtt DatabaseSecurityGroup.GroupId
+      - name: Clone target repository
+        env:
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          git clone https://x-access-token:${{ env.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.target_repo }}.git target-repo
+          cd target-repo
+          git checkout -b ${{ github.event.inputs.branch_name }}
 
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "Subnets for the database"
-      SubnetIds:
-        - !Ref DataSubnet
+      - name: Sync backup content to target repository
+        run: |
+          rsync -a --delete ./backup/ ./target-repo/
+          cd target-repo
+          git add .
+          git commit -m "Restore repository from S3 backup"
+          git push origin ${{ github.event.inputs.branch_name }}
 
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security group for the database"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: !Ref VpcCIDR
-
-Outputs:
-  NLBEndpoint:
-    Description: "Endpoint for the Network Load Balancer"
-    Value: !GetAtt NLB.DNSName
-
-  ALBEndpoint:
-    Description: "Endpoint for the Application Load Balancer"
-    Value: !GetAtt ALB.DNSName
-
-  DatabaseEndpoint:
-    Description: "Endpoint for the Database"
-    Value: !GetAtt Database.Endpoint.Address
+      - name: Clean up
+        run: rm -f backup.zip
