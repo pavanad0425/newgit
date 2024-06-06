@@ -1,120 +1,89 @@
-Setting up GitHub self-hosted runners in an AWS ECS (Elastic Container Service) cluster with Fargate involves several steps, including configuring prerequisites, setting up network connectivity, and deploying the runners. Here's a detailed documentation guide to help you through the process:
+name: Restore Repository from S3 Backup to Another Repository
 
-### Prerequisites:
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: 'S3 bucket name'
+        required: true
+      repo_name:
+        description: 'Repository name for backup file'
+        required: true
+      branch_name:
+        description: 'New branch name for the backup'
+        required: true
+      target_owner:
+        description: 'Target repository owner'
+        required: true
+      target_repo:
+        description: 'Target repository name'
+        required: true
 
-1. **GitHub Repository:** Ensure you have access to the GitHub repository for which you want to set up the self-hosted runners.
+jobs:
+  restore:
+    runs-on: ubuntu-latest
 
-2. **AWS Account:** You need an AWS account with permissions to create and manage resources like ECS clusters, Fargate tasks, IAM roles, and networking components.
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-3. **Docker Image:** Prepare a Docker image containing the GitHub runner software and any additional dependencies required.
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Change to your AWS region
 
-4. **GitHub Personal Access Token:** Generate a GitHub personal access token with appropriate permissions to register runners. Store this securely as it will be used during the runner setup.
+      - name: Download backup from S3
+        run: |
+          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
 
-### Network Connectivity:
+      - name: Verify ZIP file integrity
+        run: |
+          file_type=$(file --mime-type -b backup.zip)
+          if [ "$file_type" != "application/zip" ]; then
+            echo "The downloaded file is not a valid ZIP file."
+            exit 1
+          fi
 
-1. **VPC Configuration:** If you haven't already, set up a Virtual Private Cloud (VPC) in AWS.
+      - name: Unzip backup
+        run: |
+          unzip -q backup.zip -d backup
+          if [ $? -ne 0 ]; then
+            echo "Failed to unzip the backup file."
+            exit 1
+          fi
 
-2. **Subnets:** Create subnets within your VPC. You will need both public and private subnets. The ECS tasks will run in the private subnet, while load balancers and other public-facing components will reside in the public subnet.
+      - name: Check unzipped content
+        run: |
+          if [ ! -d "backup/.git" ]; then
+            echo "The unzipped content does not contain a valid git repository."
+            exit 1
+          fi
 
-3. **Security Groups:** Configure security groups to control inbound and outbound traffic to your ECS tasks. Ensure that your GitHub runners can communicate with GitHub's servers and any other necessary services.
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
 
-4. **Internet Gateway/NAT Gateway:** If your ECS tasks need internet access (for pulling Docker images, for example), set up an Internet Gateway or a NAT Gateway in your public subnet.
+      - name: Clone target repository
+        env:
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          git clone https://x-access-token:${{ env.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.target_repo }}.git target-repo
+          cd target-repo
+          git checkout -b ${{ github.event.inputs.branch_name }}
 
-### Setting Up GitHub Runners in AWS ECS with Fargate:
+      - name: Sync backup content to target repository
+        run: |
+          rsync -a --delete backup/ target-repo/
+          cd target-repo
+          git add .
+          git commit -m "Restore repository from S3 backup"
+          git push origin ${{ github.event.inputs.branch_name }}
 
-1. **Create ECS Cluster:**
-   - Log in to the AWS Management Console and navigate to the ECS service.
-   - Create a new ECS cluster or use an existing one.
-   - Ensure the cluster has sufficient resources to run your GitHub runners.
-
-2. **Task Definition:**
-   - Create an ECS task definition specifying the Docker image for your GitHub runner and any required configurations.
-   - Configure environment variables for the runner, including the GitHub personal access token and the repository URL.
-
-3. **Service Configuration:**
-   - Create a new ECS service using the task definition created in the previous step.
-   - Configure the service to use Fargate launch type and specify the desired number of tasks.
-
-4. **IAM Role:**
-   - Create an IAM role that allows ECS tasks to interact with other AWS services like CloudWatch Logs.
-   - Attach the necessary policies to this role.
-
-5. **Register Runners:**
-   - Once the ECS service is running, the Fargate tasks will automatically start.
-   - These tasks will register themselves as GitHub runners using the provided access token and repository URL.
-
-6. **Testing:**
-   - Verify that the runners appear in your GitHub repository's settings under "Actions" > "Runners."
-   - Trigger a workflow to ensure that the self-hosted runner executes the jobs correctly.
-
-### Monitoring and Maintenance:
-
-1. **CloudWatch Logs:** Monitor ECS task logs using CloudWatch Logs to troubleshoot any issues.
-
-2. **Auto Scaling:** Consider implementing auto-scaling policies for your ECS service to automatically adjust the number of tasks based on demand.
-
-3. **Regular Updates:** Keep your Docker image and ECS task definitions up to date with the latest GitHub runner releases and any changes in your repository's workflows.
-
-4. **Security Updates:** Regularly review and update IAM policies and security group rules to ensure the security of your ECS cluster and GitHub runners.
-
-By following these steps, you can successfully set up GitHub self-hosted runners in an AWS ECS cluster with Fargate, enabling your workflows to execute within your AWS environment.
-
-
-Setting up a self-hosted GitHub runner on an AWS ECS cluster in a private subnet requires several steps, including setting up the necessary IAM roles, creating a VPC with private subnets, configuring security groups, and launching the ECS cluster with the runner task definition. Here's a detailed guide:
-
-### Prerequisites:
-
-1. **AWS Account**: You need an AWS account with the necessary permissions to create resources like VPCs, ECS clusters, IAM roles, etc.
-  
-2. **GitHub Repository**: You should have a GitHub repository where you want to use the self-hosted runner.
-
-### Steps:
-
-#### 1. Set up a Virtual Private Cloud (VPC):
-
-- Go to the AWS Management Console and navigate to the VPC dashboard.
-- Create a new VPC with private subnets. Ensure that the private subnets do not have direct internet access. You can achieve this by not associating them with a route table that has an internet gateway.
-- Configure the VPC with the appropriate CIDR block and subnet sizes according to your requirements.
-
-#### 2. Create IAM Roles:
-
-- Create an IAM role for ECS tasks with permissions to access resources needed by your application (e.g., accessing the GitHub repository).
-- Attach the necessary policies to the role. For GitHub Actions, you'll need permissions to pull code from your repository and execute actions defined in workflows.
-
-#### 3. Set up Security Groups:
-
-- Create security groups for your ECS tasks and ensure that they allow inbound and outbound traffic as per your application's requirements. For example, you may need to allow outbound HTTPS traffic to communicate with GitHub.
-- Ensure that inbound traffic is restricted only to the necessary ports and sources.
-
-#### 4. Launch an ECS Cluster:
-
-- Go to the ECS dashboard in the AWS Management Console.
-- Create a new ECS cluster within your VPC and private subnets.
-- Configure the cluster with the appropriate instance type, ECS-optimized AMI, and desired capacity.
-
-#### 5. Define a Task Definition for the GitHub Runner:
-
-- Create a task definition that defines the container(s) for your GitHub runner. Specify the Docker image to use for the runner.
-- Configure the task definition with the necessary environment variables, such as the GitHub repository URL and access token.
-- Ensure that the task definition uses the IAM role you created earlier.
-
-#### 6. Launch the GitHub Runner Task:
-
-- Create a new ECS service using the task definition you defined.
-- Configure the service to run the desired number of tasks and to use the private subnets and security groups you created.
-- Start the service, and ECS will launch the GitHub runner tasks in your private subnet.
-
-#### 7. Configure GitHub Repository:
-
-- In your GitHub repository settings, navigate to "Settings" > "Actions" > "Add a runner".
-- Follow the instructions to download and configure the GitHub runner on your ECS instances.
-- Use the registration token provided by GitHub during the runner setup process.
-
-### Network Connectivity:
-
-- The ECS instances in your private subnet should have outbound internet access to communicate with GitHub over HTTPS.
-- Ensure that the security groups associated with your ECS instances allow outbound traffic on port 443 (HTTPS) to GitHub's IP ranges.
-- If your VPC has a NAT gateway or NAT instance for outbound internet access, make sure the private subnets are routed to it.
-- GitHub runner communicates with GitHub servers over HTTPS. So, ensure that HTTPS traffic is allowed in the outbound rules of your security groups.
-
-By following these steps, you should be able to set up a self-hosted GitHub runner on an AWS ECS cluster in a private subnet with the necessary network connectivity.
+      - name: Clean up
+        run: |
+          rm -f backup.zip
+          rm -rf backup
+          rm -rf target-repo
