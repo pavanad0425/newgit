@@ -1,164 +1,177 @@
-1. EKS Service Role:
-This IAM role is associated with your Amazon EKS cluster and should have the following permissions:
+name: Restore Repositories from S3 Backups
 
-AmazonEKSClusterPolicy: Allows Amazon EKS to manage Kubernetes clusters on your behalf.
-AmazonEKSServicePolicy: Grants necessary permissions for the Amazon EKS service to interact with other AWS services.
-2. IAM Role for Runner:
-This IAM role is used by the self-hosted GitHub runner to interact with your GitHub repository and perform necessary actions. The permissions required depend on the actions your workflows perform but generally include:
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: 'S3 bucket name'
+        required: true
+      target_owner:
+        description: 'Target repository owner'
+        required: true
+      csv_file:
+        description: 'CSV file with list of repositories (relative path in the repo)'
+        required: false
+      repo_name:
+        description: 'Single repository name for backup file (if CSV is not provided)'
+        required: false
 
-repo: Grants read/write access to the repository, including cloning, pulling, and pushing changes.
-actions: Provides access to GitHub Actions, allowing the runner to execute workflows and access job logs.
-packages: Required if your workflows publish packages or Docker images to GitHub Packages.
-admin:org: Grants access to organization-level actions, such as managing webhooks.
-admin:repo_hook: Allows the runner to manage repository hooks, which are necessary for triggering workflows.
+jobs:
+  check-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine action based on inputs
+        id: determine-action
+        run: |
+          if [[ -n "${{ github.event.inputs.csv_file }}" ]]; then
+            echo "Using CSV file for multiple repositories."
+            echo "csv_present=true" >> $GITHUB_ENV
+          elif [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
+            echo "Using single repository: ${{ github.event.inputs.repo_name }}"
+            echo "csv_present=false" >> $GITHUB_ENV
+          else
+            echo "Either csv_file or repo_name must be provided."
+            exit 1
 
-NETWORKING
+  restore_single:
+    needs: check-inputs
+    if: env.csv_present == 'false'
+    runs-on: ubuntu-latest
 
-Control Plane Connectivity:
-Private Subnet: The control plane resides within a private subnet, which means it's not directly accessible from the internet. This enhances security by preventing direct access to the Kubernetes API server from external sources.
-NAT Gateway or NAT Instance: To allow the control plane to communicate with AWS services such as EC2 instances, ECR, and S3, you'll typically use a Network Address Translation (NAT) gateway or NAT instance in a public subnet. The private subnet with the EKS control plane will route traffic through the NAT gateway/instance to reach the internet.
-Route Tables: The private subnet's route table should be configured to route internet-bound traffic (0.0.0.0/0) to the NAT gateway/instance.
-Worker Nodes Connectivity:
-Worker Node Subnets: Your worker nodes can reside in private subnets, public subnets, or a combination of both. If they're in private subnets, they won't have direct internet connectivity.
-Internet Access for Worker Nodes: To allow worker nodes to access internet resources (e.g., pulling Docker images, downloading dependencies), you can use one of the following methods:
-NAT Gateway in Public Subnet: Similar to the control plane setup, you can use a NAT gateway in a public subnet to provide internet access to worker nodes in private subnets.
-NAT Gateway in Worker Node Subnets: Alternatively, you can deploy NAT gateways directly in the worker node subnets.
-Routing: Worker nodes in private subnets must have routes configured to send internet-bound traffic to the NAT gateway.
-Cluster Communication:
-Internal Communication: Communication between the control plane and worker nodes, as well as between worker nodes themselves, occurs internally within the VPC. This traffic doesn't traverse the internet.
-Security Groups and Network ACLs: Use security groups and network ACLs to control traffic between different components of the EKS cluster. Ensure that necessary ports are open for communication, such as those required by Kubernetes components (e.g., API server, etcd) and application workloads.
-STEPS
-Before setting up a GitHub runner on an Amazon EKS cluster, ensure you have the following prerequisites in place:
+    steps:
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-### 1. Amazon EKS Cluster:
-   - An existing Amazon EKS cluster set up in your AWS account.
-   - The cluster should be accessible from the machine where you'll be running `kubectl` commands.
+      - name: Download backup from S3
+        run: |
+          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
 
-### 2. Kubernetes Tools:
-   - `kubectl` installed on your local machine to interact with your EKS cluster.
-   - Ensure you have the necessary permissions to access the cluster.
+      - name: Verify ZIP file integrity
+        run: |
+          file_type=$(file --mime-type -b backup.zip)
+          if [ "$file_type" != "application/zip" ]; then
+            echo "The downloaded file is not a valid ZIP file."
+            exit 1
+          fi
 
-### 3. GitHub Repository:
-   - A GitHub repository where you'll configure your workflows to use the self-hosted runner.
-   - You should have administrative access to this repository to manage runners.
+      - name: Unzip backup
+        run: |
+          unzip -q backup.zip -d backup
+          if [ $? -ne 0 ]; then
+            echo "Failed to unzip the backup file."
+            exit 1
+          fi
 
-### 4. IAM Roles:
-   - **EKS Service Role**: An IAM role associated with your EKS cluster with sufficient permissions. This role should include permissions to create and manage resources like EC2 instances, IAM roles, and other AWS resources.
-   - **IAM Role for Runner**: Create an IAM role for the runner with permissions to interact with your GitHub repository. Refer to the IAM Role for Runner section in the previous response for detailed permissions.
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
 
-### 5. Network Configuration:
-   - Ensure your EKS cluster is set up in a VPC with proper network configurations.
-   - If the cluster is in a private subnet, ensure there's connectivity to the internet for necessary operations like pulling Docker images and accessing GitHub.
-
-### 6. GitHub Personal Access Token:
-   - Generate a personal access token from your GitHub account with sufficient permissions to register the self-hosted runner. The token should have the `repo` scope.
-
-### 7. Kubernetes Namespace:
-   - Decide on a Kubernetes namespace where you'll deploy the GitHub runner. You can use an existing namespace or create a new one.
-
-### 8. Docker Socket Access (Optional):
-   - If your workflows involve building Docker images, ensure the GitHub runner has access to the Docker socket (`/var/run/docker.sock`). You can achieve this by mounting the Docker socket as a volume in the runner's pod.
-
-Ensure all these prerequisites are met before proceeding with setting up the GitHub runner on your EKS cluster. This will help streamline the process and avoid any unexpected issues during deployment.
-Certainly! Setting up a GitHub runner on an Amazon EKS cluster involves several steps. Below are detailed instructions:
-
-### Step 1: Prepare IAM Roles
-
-1. **EKS Service Role**: Ensure your EKS cluster has an associated IAM role with permissions to manage resources.
-2. **IAM Role for Runner**: Create an IAM role with permissions to interact with your GitHub repository. Refer to the IAM Role for Runner section in the previous response for a detailed policy.
-
-### Step 2: Generate Registration Token
-
-1. Go to your GitHub repository.
-2. Navigate to `Settings` > `Actions`.
-3. Scroll down to the "Self-hosted runners" section and click on "Add runner".
-4. Follow the prompts to create a new registration token. Keep this token safe.
-
-### Step 3: Create a Kubernetes Secret
-
-1. Store the registration token as a Kubernetes secret:
-   ```bash
-   kubectl create secret generic github-runner-registration-token --from-literal=token=<registration-token> -n <namespace-name>
-   ```
-
-### Step 4: Deploy Runner
-
-1. Use a Kubernetes manifest to deploy the runner. Below is a sample YAML manifest:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: github-runner
-  namespace: <namespace-name>
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: github-runner
-  template:
-    metadata:
-      labels:
-        app: github-runner
-    spec:
-      containers:
-      - name: github-runner
-        image: 'ghcr.io/github/runner:latest'
+      - name: Clone target repository
         env:
-        - name: RUNNER_NAME
-          value: "<runner-name>"
-        - name: GITHUB_OWNER
-          value: "<github-owner>"
-        - name: GITHUB_REPOSITORY
-          value: "<github-repository>"
-        - name: RUNNER_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: github-runner-registration-token
-              key: token
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1Gi"
-          requests:
-            cpu: "0.5"
-            memory: "0.5Gi"
-        volumeMounts:
-        - name: docker-sock
-          mountPath: /var/run/docker.sock
-      volumes:
-      - name: docker-sock
-        hostPath:
-          path: /var/run/docker.sock
-```
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.repo_name }}.git target-repo
 
-Replace `<runner-name>`, `<github-owner>`, and `<github-repository>` with your desired values.
+      - name: Create new branch with date format
+        run: |
+          cd target-repo
+          BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
+          git checkout -b $BRANCH_NAME
+          echo "Created new branch: $BRANCH_NAME"
+        env:
+          TZ: "UTC"
 
-### Step 5: Apply the Manifest
+      - name: Sync backup content to target repository
+        run: |
+          rsync -av --delete --exclude '.git' ../backup/ .
+          cd target-repo
+          git add .
+          git commit -m "Restore repository from S3 backup"
 
-1. Apply the YAML manifest to deploy the runner:
-   ```bash
-   kubectl apply -f <path-to-manifest.yaml>
-   ```
+      - name: Push to remote branch
+        env:
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          cd target-repo
+          BRANCH_NAME=$(git symbolic-ref --short HEAD)
+          git push --set-upstream origin $BRANCH_NAME
 
-### Step 6: Monitor Deployment
+      - name: Clean up
+        run: |
+          rm -f backup.zip
+          rm -rf backup
+          rm -rf target-repo
 
-1. Check the status of the deployment:
-   ```bash
-   kubectl get pods -n <namespace-name>
-   ```
+  restore_multiple:
+    needs: check-inputs
+    if: env.csv_present == 'true'
+    runs-on: ubuntu-latest
 
-### Step 7: Configure GitHub Workflow
+    steps:
+      - name: Checkout CSV file
+        uses: actions/checkout@v3
+        with:
+          path: workflow-directory
 
-1. Update your GitHub repository's workflow YAML to use the self-hosted runner. For example:
-   ```yaml
-   jobs:
-     build:
-       runs-on: self-hosted
-   ```
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-### Step 8: Verify Runner Connection
+      - name: Process each repository in CSV
+        run: |
+          # Read the CSV file and process each repository
+          cat workflow-directory/${{ github.event.inputs.csv_file }} | tail -n +2 | while IFS=, read -r repo_name; do
+            echo "Processing repository: $repo_name"
 
-1. Go to your GitHub repository's Actions tab and verify that the self-hosted runner appears and is idle.
+            # Download the backup from S3
+            aws s3 cp s3://${{ github.event.inputs.bucket }}/${repo_name}.zip backup.zip
 
-By following these steps, you should have successfully set up a self-hosted GitHub runner on your Amazon EKS cluster. Ensure to monitor the runner's health regularly and update its configuration as needed.
+            # Verify ZIP file integrity
+            file_type=$(file --mime-type -b backup.zip)
+            if [ "$file_type" != "application/zip" ]; then
+              echo "The downloaded file for $repo_name is not a valid ZIP file."
+              exit 1
+            fi
+
+            # Unzip the backup
+            unzip -q backup.zip -d backup
+            if [ $? -ne 0 ]; then
+              echo "Failed to unzip the backup file for $repo_name."
+              exit 1
+            fi
+
+            # Configure Git
+            git config --global user.name 'github-actions'
+            git config --global user.email 'github-actions@github.com'
+
+            # Clone target repository
+            git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${repo_name}.git target-repo
+
+            # Create new branch with date format
+            cd target-repo
+            BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
+            git checkout -b $BRANCH_NAME
+            echo "Created new branch: $BRANCH_NAME"
+
+            # Sync backup content to target repository
+            rsync -av --delete --exclude '.git' ../backup/ .
+            git add .
+            git commit -m "Restore repository from S3 backup"
+
+            # Push to remote branch
+            git push --set-upstream origin $BRANCH_NAME
+
+            # Clean up for the next repository
+            cd ..
+            rm -f backup.zip
+            rm -rf backup
+            rm -rf target-repo
+          done
