@@ -1,0 +1,196 @@
+name: Restore Repositories from S3 Backups
+
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: 'S3 bucket name'
+        required: true
+      target_owner:
+        description: 'Target repository owner'
+        required: true
+      csv_file:
+        description: 'CSV file with list of repositories (relative path in the repo)'
+        required: false
+      repo_name:
+        description: 'Single repository name for backup file (if CSV is not provided)'
+        required: false
+
+jobs:
+  check-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      csv_present: ${{ steps.check.outputs.csv_present }}
+    steps:
+      - name: Determine action based on inputs
+        id: check
+        run: |
+          set -e  # Exit on error
+          case "${{ github.event.inputs.csv_file }}${{ github.event.inputs.repo_name }}" in
+            "") 
+              echo "Either csv_file or repo_name must be provided."
+              exit 1
+              ;;
+            *[^,]*)
+              echo "csv_present=true" >> $GITHUB_ENV
+              echo "csv_present=true" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "csv_present=false" >> $GITHUB_ENV
+              echo "csv_present=false" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+  restore_single:
+    needs: check-inputs
+    if: needs.check-inputs.outputs.csv_present == 'false'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download backup from S3
+        run: |
+          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
+
+      - name: Verify ZIP file integrity
+        run: |
+          file_type=$(file --mime-type -b backup.zip)
+          if [ "$file_type" != "application/zip" ]; then
+            echo "The downloaded file is not a valid ZIP file."
+            exit 1
+          fi
+
+      - name: Unzip backup
+        run: |
+          unzip -q backup.zip -d backup
+          if [ $? -ne 0 ]; then
+            echo "Failed to unzip the backup file."
+            exit 1
+          fi
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+
+      - name: Clone target repository
+        env:
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.repo_name }}.git target-repo
+
+      - name: Create new branch with date format
+        run: |
+          cd target-repo
+          BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
+          git checkout -b $BRANCH_NAME
+          echo "Created new branch: $BRANCH_NAME"
+        env:
+          TZ: "UTC"
+
+      - name: Sync backup content to target repository
+        run: |
+          rsync -av --delete --exclude '.git' ../backup/ .
+          cd target-repo
+          git add .
+          git commit -m "Restore repository from S3 backup"
+
+      - name: Push to remote branch
+        env:
+          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
+        run: |
+          cd target-repo
+          BRANCH_NAME=$(git symbolic-ref --short HEAD)
+          git push --set-upstream origin $BRANCH_NAME
+
+      - name: Clean up
+        run: |
+          rm -f backup.zip
+          rm -rf backup
+          rm -rf target-repo
+
+  restore_multiple:
+    needs: check-inputs
+    if: needs.check-inputs.outputs.csv_present == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout CSV file
+        uses: actions/checkout@v3
+        with:
+          path: workflow-directory
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Debug CSV File
+        run: |
+          echo "Contents of CSV file:"
+          cat workflow-directory/${{ github.event.inputs.csv_file }}
+
+      - name: Process each repository in CSV
+        run: |
+          set -e  # Exit on error
+          # Read the CSV file and process each repository
+          while IFS=, read -r repo_name; do
+            # Skip the header or any empty lines
+            if [[ "$repo_name" == "repo_name" ]] || [[ -z "$repo_name" ]]; then
+              continue
+            fi
+
+            echo "Processing repository: $repo_name"
+
+            # Download the backup from S3
+            aws s3 cp s3://${{ github.event.inputs.bucket }}/${repo_name}.zip backup.zip
+
+            # Verify ZIP file integrity
+            file_type=$(file --mime-type -b backup.zip)
+            if [ "$file_type" != "application/zip" ]; then
+              echo "The downloaded file for $repo_name is not a valid ZIP file."
+              exit 1
+            fi
+
+            # Unzip the backup
+            unzip -q backup.zip -d backup
+            if [ $? -ne 0 ]; then
+              echo "Failed to unzip the backup file for $repo_name."
+              exit 1
+            fi
+
+            # Configure Git
+            git config --global user.name 'github-actions'
+            git config --global user.email 'github-actions@github.com'
+
+            # Clone target repository
+            git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${repo_name}.git target-repo
+
+            # Create new branch with date format
+            cd target-repo
+            BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
+            git checkout -b $BRANCH_NAME
+            echo "Created new branch: $BRANCH_NAME"
+
+            # Sync backup content to target repository
+            rsync -av --delete --exclude '.git' ../backup/ .
+            git add .
+            git commit -m "Restore repository from S3 backup"
+
+            # Push to remote branch
+            git push --set-upstream origin $BRANCH_NAME
+
+            # Clean up for the next repository
+            cd ..
+            rm -f backup.zip
+            rm -rf backup
+            rm -rf target-repo
+          done < workflow-directory/${{ github.event.inputs.csv_file }}
