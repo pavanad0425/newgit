@@ -1,36 +1,108 @@
-Create a Test Environment:
-
-Set up a separate AWS account or use a separate AWS environment (e.g., VPC, subnets) within the same account.
-Ensure that the test environment closely resembles the production environment in terms of network configuration, security settings, and resource allocation.
-Clone Microservice:
-
-Clone the source code repository of the microservice you want to test.
-Ensure that you clone all necessary dependencies, configurations, and any required data.
-If necessary, modify configurations or endpoints to prevent conflicts with the production environment.
-Containerize the Test Microservice:
-
-Create a Dockerfile for the test microservice to define its dependencies and environment.
-Build a Docker image for the test microservice, tagging it appropriately to distinguish it from the production version.
-Push the Docker image to a container registry such as Amazon ECR (Elastic Container Registry) or Docker Hub.
-Deploy to ECS Test Cluster:
-
-Configure the necessary ECS resources in the test environment, including task definitions, ECS services, clusters, and any supporting infrastructure (e.g., IAM roles, security groups).
-Create an ECS task definition for the test microservice, specifying the Docker image and any required environment variables, ports, volumes, etc.
-Create an ECS service to manage the deployment and scaling of the test microservice. Configure the desired number of tasks, placement constraints, and any other relevant settings.
-Test:
-
-Access the test microservice through its endpoints or API gateway.
-Conduct various types of testing, such as unit tests, integration tests, regression tests, performance tests, and security tests.
-Monitor the behavior and performance of the test microservice using logging, metrics, and tracing tools.
-Use automated testing tools or frameworks to streamline the testing process and ensure thorough coverage.
-Monitor and Analyze:
-
-Monitor the health and performance of the test microservice using AWS CloudWatch or other monitoring solutions.
-Analyze the collected metrics, logs, and traces to identify any issues or anomalies.
-Use monitoring dashboards and alerts to stay informed about the status of the test microservice and detect any potential problems.
-Cleanup:
-
-Once testing is complete, stop the ECS tasks associated with the test microservice.
-Delete the ECS service, task definition, and any other ECS resources created for testing.
-Optionally, remove the Docker image from the container registry to free up storage space.
-Ensure that all resources are properly cleaned up to avoid unnecessary costs or clutter in the test environment.
++---------------------+
+| Developer Commits   |
+|       Code          |
++---------+-----------+
+          |
+          v
++---------------------+
+| Trigger GitHub      |
+|     Actions         |
++---------+-----------+
+          |
+          v
++---------------------+
+| Check Out Code      |
++---------+-----------+
+          |
+          v
++---------------------+
+|   Check Branch      |
++----+----+-----------+
+     |    |
+     |    +-------------------+
+     |                        |
+     v                        v
++----+----+       +-----------+------------+
+| Feature  |       |  Main Branch           |
+|  Branch  |       +-----------+------------+
++----+-----+                   |
+     |                         v
+     |     +------------------+------------------+
+     |     | Set Up Node.js/Python Environment  |
+     |     +------------------+------------------+
+     |                         |
+     |                         v
+     |     +------------------+------------------+
+     |     |    Install Dependencies            |
+     |     +------------------+------------------+
+     |                         |
+     |                         v
+     |     +------------------+------------------+
+     |     |      Run Tests                       |
+     |     +------------------+------------------+
+     |              |                   |
+     |              |                   v
+     |              |         +---------------------+
+     |              +-------->|   Tests Pass?       |
+     |                        +-----+---------------+
+     |                              |
+     |                              v
+     |                    +------------------+
+     |                    | Tests Fail       |
+     |                    +-----+------------+
+     |                          |
+     v                          v
++----+----------------+      +---------------------+
+| Skip Deployment    |      | Notify Failure       |
+| (Optionally)       |      +---------------------+
++--------------------+
+         |
+         v
++----------------------+
+|  Build Code          |
++----------+-----------+
+           |
+           v
++----------------------+
+| Check Env Variables  |
++----+-----------------+
+     |
+     +-----------------------------+
+     |                             |
+     v                             v
++----+----------------+   +------------------+
+|   Variables Missing |   | Variables Set    |
++----+----------------+   +------+-----------+
+     |                        |
+     |                        v
+     |              +------------------+
+     |              | Package Code for |
+     |              |   Deployment     |
+     |              +---------+--------+
+     |                        |
+     v                        v
++-------------------+    +---------------------+
+| Notify Missing    |    | Authenticate to AWS |
+| Configuration     |    +----------+----------+
++-------------------+               |
+                                     v
+                              +-----------------+
+                              | Deploy to AWS   |
+                              |    Lambda       |
+                              +---------+-------+
+                                        |
+                                        v
+                            +-----------+------------+
+                            | Check if Lambda Exists |
+                            +---------+-------+------+
+                                      |       |
+                                      v       v
+                         +------------------+ +------------------+
+                         | Update Existing  | |  Create New      |
+                         | Lambda Function  | |  Lambda Function |
+                         +-------+----------+ +-------+----------+
+                                 |                    |
+                                 v                    v
+                      +------------------+    +------------------+
+                      | Notify Success   |    | Notify Success   |
+                      +------------------+    +------------------+
