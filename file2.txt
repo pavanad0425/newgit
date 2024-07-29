@@ -1,45 +1,18 @@
-General Migration Steps
-
-Assuming you're migrating Nexus Repository Manager 3 to a recent OpenShift version and require data migration and high availability:
-
-1. Backup Your On-Prem Nexus
-Database Backup: If using a database (e.g., PostgreSQL), create a complete backup.
-Blob Store Backup: Back up the blob store containing artifacts.
-Configuration Backup: Backup Nexus configuration files.
-2. Prepare OpenShift Environment
-Create Project: Create a dedicated project for Nexus.
-Persistent Storage: Set up persistent volumes and storage classes for Nexus data and configuration.
-Image Registry: Ensure you have an accessible image registry for Nexus Docker images.
-3. Install Nexus Operator
-Operator Hub: Use the OpenShift Operator Hub to install the Nexus Repository HA Operator.
-Custom Resource Definition (CRD): Create a NexusRepo custom resource to define your Nexus instance.
-4. Deploy Nexus
-Operator-Managed Deployment: Use the Nexus Repository HA Operator to deploy Nexus instances.
-High Availability: Configure the operator for high availability if required.
-Environment Variables: Set environment variables for database connection, blob store, and other configurations.
-5. Data Migration
-Database Migration: Restore the database backup to the OpenShift database.
-Blob Store Migration: Copy blob store data to the configured persistent volume.
-Configuration Migration: Apply the backed-up configuration to the Nexus instance.
-6. Testing and Validation
-Functionality Testing: Verify Nexus services and repositories are working correctly.
-Performance Testing: Evaluate Nexus performance under load.
-Data Integrity: Check data consistency after migration.
-7. Cutover and Finalization
-DNS Updates: Update DNS records to point to the new OpenShift Nexus instance.
-Client Configuration: Update client configurations to use the new Nexus endpoint.
-Monitor and Optimize: Continuously monitor Nexus performance and optimize as needed.
-Additional Considerations
-
-Nexus Version Compatibility: Ensure compatibility between your on-prem Nexus version and the Nexus operator.
-Database Migration Tools: Consider using database migration tools for efficient data transfer.
-Security: Implement appropriate security measures for Nexus on OpenShift.
-Backup and Disaster Recovery: Establish backup and disaster recovery procedures for the OpenShift Nexus environment.
-Monitoring: Set up monitoring for Nexus components and metrics.
-Specific Guidance
-
-To provide more tailored guidance, please share details about:
-
-Your current Nexus setup (version, database, blob store, configuration).
-Your desired OpenShift environment (version, storage options, network configuration).
-Your migration goals (data retention, performance requirements, high availability needs).
+apiVersion: nexus.example.com/v1alpha1
+kind: Nexus
+metadata:
+  name: nexus-repository-manager
+  namespace: nexus
+spec:
+  version: "3.38.1"  # Specify the version you want to use
+  application:
+    memory: 2Gi
+    cpu: 1
+  nexusData:
+    storage:
+      size: 10Gi
+  postgres:
+    name: nexus-postgresql
+    database: nexusdb
+    user: nexus
+    password: nexuspassword
