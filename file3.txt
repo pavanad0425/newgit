@@ -1,177 +1,85 @@
-name: Restore Repositories from S3 Backups
+The error message indicates a template rendering issue in your Helm chart, specifically with the `include` statements in your `postgresql/templates/primary/svc.yaml` and `postgresql/templates/_helpers.tpl` files. The error suggests that the template `common.names.fullname` is not found.
 
-on:
-  workflow_dispatch:
-    inputs:
-      bucket:
-        description: 'S3 bucket name'
-        required: true
-      target_owner:
-        description: 'Target repository owner'
-        required: true
-      csv_file:
-        description: 'CSV file with list of repositories (relative path in the repo)'
-        required: false
-      repo_name:
-        description: 'Single repository name for backup file (if CSV is not provided)'
-        required: false
+Here's a step-by-step approach to troubleshoot and resolve this issue:
 
+1. **Check the Helm Chart Dependencies**:
+   Ensure that the required dependencies are correctly included in your `Chart.yaml` file. If the `common.names.fullname` template is part of a dependency, it must be properly declared.
+
+2. **Verify Template Inclusion**:
+   Ensure that the `common.names.fullname` template exists and is correctly defined. It should be located in one of the helper templates, commonly `_helpers.tpl`.
+
+3. **Correct Template Paths**:
+   Verify the paths used in the `include` statements are correct and match the actual template structure.
+
+Here are the specific areas to check and update:
+
+### 1. `Chart.yaml`
+
+Make sure you have the required dependencies listed if `common.names.fullname` is part of another chart:
+
+```yaml
+dependencies:
+  - name: common
+    version: "X.Y.Z"  # Use the appropriate version
+    repository: "https://example.com/helm-charts"
+```
+
+### 2. `_helpers.tpl`
+
+Ensure the template `common.names.fullname` is defined correctly:
+
+```yaml
+{{- define "common.names.fullname" -}}
+{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+```
+
+### 3. `svc.yaml`
+
+Ensure the inclusion statement is correct:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgresql.v1.primary.fullname" . }}
+  labels:
+    app: {{ include "postgresql.v1.primary.fullname" . }}
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: {{ include "postgresql.v1.primary.fullname" . }}
+```
+
+If `postgresql.v1.primary.fullname` relies on `common.names.fullname`, make sure it's correctly included:
+
+```yaml
+{{- define "postgresql.v1.primary.fullname" -}}
+{{ include "common.names.fullname" . }}
+{{- end -}}
+```
+
+### 4. GitHub Actions Workflow
+
+Ensure the Helm command in your GitHub Actions workflow is correctly formatted. Here's an example of what it should look like:
+
+```yaml
 jobs:
-  check-inputs:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Determine action based on inputs
-        id: determine-action
-        run: |
-          if [[ -n "${{ github.event.inputs.csv_file }}" ]]; then
-            echo "Using CSV file for multiple repositories."
-            echo "csv_present=true" >> $GITHUB_ENV
-          elif [[ -n "${{ github.event.inputs.repo_name }}" ]]; then
-            echo "Using single repository: ${{ github.event.inputs.repo_name }}"
-            echo "csv_present=false" >> $GITHUB_ENV
-          else
-            echo "Either csv_file or repo_name must be provided."
-            exit 1
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-  restore_single:
-    needs: check-inputs
-    if: env.csv_present == 'false'
-    runs-on: ubuntu-latest
+    - name: Set up Helm
+      uses: azure/setup-helm@v1
 
-    steps:
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+    - name: Deploy PostgreSQL
+      run: helm upgrade -i --reset-values --timeout 10m --history-max=3 postgresql https://registry.global.ccc.srvb.mx.paas.cloudcenter.corp/chartrepo/sdop_devops/charts/postgresql-15.5.20.tgz
+```
 
-      - name: Download backup from S3
-        run: |
-          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
+Make sure you have the correct version of the chart and all necessary dependencies are included.
 
-      - name: Verify ZIP file integrity
-        run: |
-          file_type=$(file --mime-type -b backup.zip)
-          if [ "$file_type" != "application/zip" ]; then
-            echo "The downloaded file is not a valid ZIP file."
-            exit 1
-          fi
-
-      - name: Unzip backup
-        run: |
-          unzip -q backup.zip -d backup
-          if [ $? -ne 0 ]; then
-            echo "Failed to unzip the backup file."
-            exit 1
-          fi
-
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-
-      - name: Clone target repository
-        env:
-          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
-        run: |
-          git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.repo_name }}.git target-repo
-
-      - name: Create new branch with date format
-        run: |
-          cd target-repo
-          BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
-          git checkout -b $BRANCH_NAME
-          echo "Created new branch: $BRANCH_NAME"
-        env:
-          TZ: "UTC"
-
-      - name: Sync backup content to target repository
-        run: |
-          rsync -av --delete --exclude '.git' ../backup/ .
-          cd target-repo
-          git add .
-          git commit -m "Restore repository from S3 backup"
-
-      - name: Push to remote branch
-        env:
-          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
-        run: |
-          cd target-repo
-          BRANCH_NAME=$(git symbolic-ref --short HEAD)
-          git push --set-upstream origin $BRANCH_NAME
-
-      - name: Clean up
-        run: |
-          rm -f backup.zip
-          rm -rf backup
-          rm -rf target-repo
-
-  restore_multiple:
-    needs: check-inputs
-    if: env.csv_present == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout CSV file
-        uses: actions/checkout@v3
-        with:
-          path: workflow-directory
-
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Process each repository in CSV
-        run: |
-          # Read the CSV file and process each repository
-          cat workflow-directory/${{ github.event.inputs.csv_file }} | tail -n +2 | while IFS=, read -r repo_name; do
-            echo "Processing repository: $repo_name"
-
-            # Download the backup from S3
-            aws s3 cp s3://${{ github.event.inputs.bucket }}/${repo_name}.zip backup.zip
-
-            # Verify ZIP file integrity
-            file_type=$(file --mime-type -b backup.zip)
-            if [ "$file_type" != "application/zip" ]; then
-              echo "The downloaded file for $repo_name is not a valid ZIP file."
-              exit 1
-            fi
-
-            # Unzip the backup
-            unzip -q backup.zip -d backup
-            if [ $? -ne 0 ]; then
-              echo "Failed to unzip the backup file for $repo_name."
-              exit 1
-            fi
-
-            # Configure Git
-            git config --global user.name 'github-actions'
-            git config --global user.email 'github-actions@github.com'
-
-            # Clone target repository
-            git clone https://x-access-token:${{ secrets.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${repo_name}.git target-repo
-
-            # Create new branch with date format
-            cd target-repo
-            BRANCH_NAME="feature/GenAI$(date +'%m%d%Y')"
-            git checkout -b $BRANCH_NAME
-            echo "Created new branch: $BRANCH_NAME"
-
-            # Sync backup content to target repository
-            rsync -av --delete --exclude '.git' ../backup/ .
-            git add .
-            git commit -m "Restore repository from S3 backup"
-
-            # Push to remote branch
-            git push --set-upstream origin $BRANCH_NAME
-
-            # Clean up for the next repository
-            cd ..
-            rm -f backup.zip
-            rm -rf backup
-            rm -rf target-repo
-          done
+After making these adjustments, re-run your GitHub Actions workflow to see if the issue is resolved.
