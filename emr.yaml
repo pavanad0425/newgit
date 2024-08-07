@@ -1,59 +1,38 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "Create an EMR cluster using existing VPC and subnets."
-Parameters:
-  ExistingVPC:
-    Type: "AWS::EC2::VPC::Id"
-    Description: "ID of the existing VPC to use for the EMR cluster."
-  ExistingSubnet1:
-    Type: "AWS::EC2::Subnet::Id"
-    Description: "ID of the existing subnet 1 within the VPC for the EMR cluster."
-  ExistingSubnet2:
-    Type: "AWS::EC2::Subnet::Id"
-    Description: "ID of the existing subnet 2 within the VPC for the EMR cluster."
-  ClusterName:
-    Type: "String"
-    Description: "Name of the EMR cluster."
-  ReleaseLabel:
-    Type: "String"
-    Description: "EMR release label."
-    Default: "emr-6.4.0"
-  InstanceType:
-    Type: "String"
-    Description: "Instance type for the EMR cluster nodes."
-    Default: "m5.xlarge"
-  NumberOfInstances:
-    Type: "Number"
-    Description: "Number of instances in the EMR cluster."
-    Default: 3
-Resources:
-  EMRCluster:
-    Type: "AWS::EMR::Cluster"
-    Properties:
-      Name: !Ref ClusterName
-      ReleaseLabel: !Ref ReleaseLabel
-      Applications:
-        - Name: "Spark"
-        - Name: "Hive"
-        - Name: "Hadoop"
-      Instances:
-        Ec2SubnetId: !Ref ExistingSubnet1
-        EmrManagedMasterSecurityGroup: !GetAtt MasterSecurityGroup.GroupId
-        EmrManagedSlaveSecurityGroup: !GetAtt SlaveSecurityGroup.GroupId
-        InstanceGroups:
-          - InstanceRole: "MASTER"
-            InstanceType: !Ref InstanceType
-            InstanceCount: 1
-          - InstanceRole: "CORE"
-            InstanceType: !Ref InstanceType
-            InstanceCount: !Ref NumberOfInstances
-      VisibleToAllUsers: true
-  MasterSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      GroupDescription: "Security group for the EMR master node"
-      VpcId: !Ref ExistingVPC
-  SlaveSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      GroupDescription: "Security group for the EMR slave nodes"
-      VpcId: !Ref ExistingVPC
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus
+  namespace: nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      containers:
+      - name: nexus
+        image: sonatype/nexus3:latest
+        ports:
+        - containerPort: 8081
+        env:
+        - name: NEXUS_DB_HOST
+          value: "nexus-postgresql"
+        - name: NEXUS_DB_PORT
+          value: "5432"
+        - name: NEXUS_DB_NAME
+          value: "nexusdb"
+        - name: NEXUS_DB_USER
+          value: "nexus"
+        - name: NEXUS_DB_PASSWORD
+          value: "nexuspassword"
+        volumeMounts:
+        - mountPath: /nexus-data
+          name: nexus-storage
+      volumes:
+      - name: nexus-storage
+        persistentVolumeClaim:
+          claimName: nexus-pvc
