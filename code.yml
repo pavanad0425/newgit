@@ -11,3 +11,28 @@ JOIN cd_deployment b ON a.deployment_id = b.id
 JOIN cd_service c ON b.application_id = c.application_id  
 WHERE DATE(a.timestamp) BETWEEN '2024-08-01' AND '2024-08-12' 
 ORDER BY a.timestamp ASC;
+
+
+
+
+SELECT 
+    a.application_name, 
+    a.service_name, 
+    b.description, 
+    a.status, 
+    a.timestamp::date AS deployment_date, 
+    a.deployment_id, 
+    c.deplomenttype 
+FROM cd_deplomenthistory a 
+JOIN cd_deployment b ON a.deployment_id = b.id 
+JOIN cd_service c ON b.application_id = c.application_id  
+WHERE DATE(a.timestamp) BETWEEN '2024-08-01' AND '2024-08-12' 
+GROUP BY 
+    a.application_name, 
+    a.service_name, 
+    b.description, 
+    a.status, 
+    a.timestamp::date, 
+    a.deployment_id, 
+    c.deplomenttype 
+ORDER BY a.timestamp ASC;
