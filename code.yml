@@ -1,66 +1,13 @@
-name: Restore Repository from S3 Backup to Another Repository
-
-on:
-  workflow_dispatch:
-    inputs:
-      bucket:
-        description: 'S3 bucket name'
-        required: true
-      repo_name:
-        description: 'Repository name for backup file'
-        required: true
-      branch_name:
-        description: 'New branch name for the backup'
-        required: true
-      target_owner:
-        description: 'Target repository owner'
-        required: true
-      target_repo:
-        description: 'Target repository name'
-        required: true
-
-jobs:
-  restore:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1  # Change to your AWS region
-
-      - name: Download backup from S3
-        run: |
-          aws s3 cp s3://${{ github.event.inputs.bucket }}/${{ github.event.inputs.repo_name }}.zip backup.zip
-
-      - name: Unzip backup
-        run: unzip -o backup.zip
-
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-
-      - name: Clone target repository
-        env:
-          TARGET_REPO_PAT: ${{ secrets.TARGET_REPO_PAT }}
-        run: |
-          git clone https://x-access-token:${{ env.TARGET_REPO_PAT }}@github.com/${{ github.event.inputs.target_owner }}/${{ github.event.inputs.target_repo }}.git target-repo
-          cd target-repo
-          git checkout -b ${{ github.event.inputs.branch_name }}
-
-      - name: Sync backup content to target repository
-        run: |
-          rsync -a --delete ./backup/ ./target-repo/
-          cd target-repo
-          git add .
-          git commit -m "Restore repository from S3 backup"
-          git push origin ${{ github.event.inputs.branch_name }}
-
-      - name: Clean up
-        run: rm -f backup.zip
+SELECT DISTINCT 
+    a.application_name, 
+    a.service_name, 
+    b.description, 
+    a.status, 
+    a.timestamp::date AS deployment_date, 
+    a.deployment_id, 
+    c.deplomenttype 
+FROM cd_deplomenthistory a 
+JOIN cd_deployment b ON a.deployment_id = b.id 
+JOIN cd_service c ON b.application_id = c.application_id  
+WHERE DATE(a.timestamp) BETWEEN '2024-08-01' AND '2024-08-12' 
+ORDER BY a.timestamp ASC;
