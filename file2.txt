@@ -1,18 +1,15 @@
-apiVersion: nexus.example.com/v1alpha1
-kind: Nexus
-metadata:
-  name: nexus-repository-manager
-  namespace: nexus
-spec:
-  version: "3.38.1"  # Specify the version you want to use
-  application:
-    memory: 2Gi
-    cpu: 1
-  nexusData:
-    storage:
-      size: 10Gi
-  postgres:
-    name: nexus-postgresql
-    database: nexusdb
-    user: nexus
-    password: nexuspassword
+Backup Job in us-east-1:
+
+This job copies all resources, including application code from Bitbucket, to an S3 bucket in the us-east-1 region.
+This has been happening for the past two years.
+Copy Job from us-east-1 to us-west-2:
+
+There is a separate job configured in us-east-1 that copies the contents of the same S3 bucket to another S3 bucket in the us-west-2 region.
+Backup Job in us-west-2:
+
+Additionally, there's another backup job running in the us-west-2 region that backs up the same S3 bucket located in us-west-2.
+Essentially, you have a chain of backup jobs and copy operations involving the same data across multiple regions:
+
+Backup in us-east-1 → S3 bucket in us-east-1.
+Copy from us-east-1 → S3 bucket in us-west-2.
+Another backup job in us-west-2 on the S3 bucket in us-west-2.
