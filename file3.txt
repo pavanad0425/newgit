@@ -9,7 +9,7 @@ We are currently analyzing the backup jobs and S3 storage in our DevOps account.
 Each bucket contains approximately 23TB of data, with both buckets holding similar content. Upon further inspection, we discovered that the majority of the data consists of application code backups, some of which date back to 2022. According to the current configuration, this data is being maintained in the S3 Standard storage class for 35 days.
 
 Attached is a detailed document that outlines the current backup job schedule and our proposed schedule. The document also discusses alternative storage options and provides our recommendations for optimizing storage and retention policies.
-
+Additionally, please analyze the necessity of maintaining duplicate data in both S3 buckets. If the duplication is not required, kindly disable the copy job in the us-east-1 region and the backup jobs in the us-west-2 region.
 Please review the attached document and take the necessary actions accordingly.
 
 Thank you.
