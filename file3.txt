@@ -1,85 +1,15 @@
-The error message indicates a template rendering issue in your Helm chart, specifically with the `include` statements in your `postgresql/templates/primary/svc.yaml` and `postgresql/templates/_helpers.tpl` files. The error suggests that the template `common.names.fullname` is not found.
+Subject: Request for Analysis and Cleanup of S3 Buckets in DevOps Account
 
-Here's a step-by-step approach to troubleshoot and resolve this issue:
+Description:
 
-1. **Check the Helm Chart Dependencies**:
-   Ensure that the required dependencies are correctly included in your `Chart.yaml` file. If the `common.names.fullname` template is part of a dependency, it must be properly declared.
+Hello Team,
 
-2. **Verify Template Inclusion**:
-   Ensure that the `common.names.fullname` template exists and is correctly defined. It should be located in one of the helper templates, commonly `_helpers.tpl`.
+We are currently analyzing the backup jobs and S3 storage in our DevOps account. We have identified that 27 backup jobs are configured to run daily, with the resulting backups stored in two S3 buckets: bucket1 and bucket2.
 
-3. **Correct Template Paths**:
-   Verify the paths used in the `include` statements are correct and match the actual template structure.
+Each bucket contains approximately 23TB of data, with both buckets holding similar content. Upon further inspection, we discovered that the majority of the data consists of application code backups, some of which date back to 2022. According to the current configuration, this data is being maintained in the S3 Standard storage class for 35 days.
 
-Here are the specific areas to check and update:
+Attached is a detailed document that outlines the current backup job schedule and our proposed schedule. The document also discusses alternative storage options and provides our recommendations for optimizing storage and retention policies.
 
-### 1. `Chart.yaml`
+Please review the attached document and take the necessary actions accordingly.
 
-Make sure you have the required dependencies listed if `common.names.fullname` is part of another chart:
-
-```yaml
-dependencies:
-  - name: common
-    version: "X.Y.Z"  # Use the appropriate version
-    repository: "https://example.com/helm-charts"
-```
-
-### 2. `_helpers.tpl`
-
-Ensure the template `common.names.fullname` is defined correctly:
-
-```yaml
-{{- define "common.names.fullname" -}}
-{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-```
-
-### 3. `svc.yaml`
-
-Ensure the inclusion statement is correct:
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "postgresql.v1.primary.fullname" . }}
-  labels:
-    app: {{ include "postgresql.v1.primary.fullname" . }}
-spec:
-  ports:
-    - port: 5432
-      targetPort: 5432
-  selector:
-    app: {{ include "postgresql.v1.primary.fullname" . }}
-```
-
-If `postgresql.v1.primary.fullname` relies on `common.names.fullname`, make sure it's correctly included:
-
-```yaml
-{{- define "postgresql.v1.primary.fullname" -}}
-{{ include "common.names.fullname" . }}
-{{- end -}}
-```
-
-### 4. GitHub Actions Workflow
-
-Ensure the Helm command in your GitHub Actions workflow is correctly formatted. Here's an example of what it should look like:
-
-```yaml
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Set up Helm
-      uses: azure/setup-helm@v1
-
-    - name: Deploy PostgreSQL
-      run: helm upgrade -i --reset-values --timeout 10m --history-max=3 postgresql https://registry.global.ccc.srvb.mx.paas.cloudcenter.corp/chartrepo/sdop_devops/charts/postgresql-15.5.20.tgz
-```
-
-Make sure you have the correct version of the chart and all necessary dependencies are included.
-
-After making these adjustments, re-run your GitHub Actions workflow to see if the issue is resolved.
+Thank you.
