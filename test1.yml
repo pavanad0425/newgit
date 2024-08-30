@@ -1,18 +1,42 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Create a simple VPC and export its VPC ID
+import subprocess
+import json
 
-Resources:
-  MyVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      Tags:
-        - Key: Name
-          Value: MyVPC
-
-Outputs:
-  VpcId:
-    Description: VPC ID
-    Value: !Ref MyVPC
-    Export:
-      Name: !Sub "${AWS::StackName}-VpcId"
+def lambda_handler(event, context):
+    url = event.get("url", "https://example.com")
+    
+    # Execute curl command to get detailed response including networking details
+    curl_command = [
+        "curl", 
+        "-w", "@-", 
+        "-o", "/dev/null", 
+        "-s", 
+        url,
+        "--write-out",
+        '''
+        {
+            "http_code": "%{http_code}",
+            "time_total": "%{time_total}",
+            "time_namelookup": "%{time_namelookup}",
+            "time_connect": "%{time_connect}",
+            "time_appconnect": "%{time_appconnect}",
+            "time_pretransfer": "%{time_pretransfer}",
+            "time_starttransfer": "%{time_starttransfer}",
+            "size_download": "%{size_download}",
+            "size_header": "%{size_header}",
+            "speed_download": "%{speed_download}"
+        }
+        '''
+    ]
+    
+    try:
+        response = subprocess.run(curl_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        response_data = json.loads(response.stdout.decode('utf-8'))
+        return {
+            'statusCode': 200,
+            'body': json.dumps(response_data)
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({"error": str(e)})
+        }
